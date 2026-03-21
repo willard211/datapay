@@ -1,0 +1,20 @@
+[
+  {
+    "idNumber": "110105199001011234",
+    "name": "张三",
+    "activeLoans": 3,
+    "totalOutstandingBalance": 125000.0,
+    "overdueCount30Days": 1,
+    "overdueCount90Days": 0,
+    "riskLevel": "HIGH"
+  },
+  {
+    "idNumber": "310104198505058888",
+    "name": "李四",
+    "activeLoans": 0,
+    "totalOutstandingBalance": 0.0,
+    "overdueCount30Days": 0,
+    "overdueCount90Days": 0,
+    "riskLevel": "LOW"
+  }
+]
