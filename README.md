@@ -20,33 +20,40 @@ DataPay (底层 CLI 引擎名 `wrap402`) 是一个基于 HTTP `402 Payment Requi
 ## 📦 架构说明
 
 本项目分为两个完全解耦的独立引擎：
-1. **Core Backend (`src/`)**：基于 Express 的 NodeJS 包裹引擎（端口默认为 `4020`）。负责 402 计费熔断、鉴权、真实数据代理透传。
-2. **Web Dashboard (`dashboard/`)**：可视化数据平台管理面板（端口默认为 `5173`）。使用 Axios 与后端互动。
+1. **Core Backend (`src/`)**：基于 Express 的 NodeJS 包裹引擎（端口默认为 `4021`）。
+   - **数据持久化**：采用 Prisma + PostgreSQL，支持多租户资产管理。
+   - **鉴权中心**：内置 JWT 身份验证与 API Key 轮转机制。
+   - **402 计费**：负责计费熔断、鉴权、真实数据代理透传。
+2. **Web Dashboard (`dashboard/`)**：可视化管理面板。
+   - **模块化架构**：基于 React + TypeScript 的重构版本，组件深度解耦。
+   - **混合支付**：集成全球 Stripe 结算与境内聚合支付模拟。
+   - **商业洞察**：动态真实数据驱动的营收与流量分析图表。
 
 ## 🛠️ 快速上手
 
 ### 1. 安装核心依赖
-确保已安装 Node.js (v18+)，然后进入根目录安装依赖：
+确保已安装 Node.js (v18+) 和 PostgreSQL，然后配置数据库环境变量并运行迁移：
 ```bash
 npm install
+npx prisma migrate dev
+npx tsx scripts/migrate-assets.ts  # 迁移旧 JSON 数据到数据库
 npm run build
 ```
 
 ### 2. 启动数据包装引擎
-启动主网络服务器，它将开启 `4020` 计费端口：
+启动主网络服务器，它将开启 `4021` 端口：
 ```bash
+# 默认启动
 npx tsx src/cli.ts serve
 ```
-*(你也可以通过 `npx tsx src/cli.ts publish <path/url> --name "数据" --price 1` 在命令行发布新资产)*
 
 ### 3. 启动管理控制台 Dashboard
-新开一个终端终端，进入 `dashboard` 目录运行：
+进入 `dashboard` 目录运行：
 ```bash
 cd dashboard
 npm install
 npm run dev
 ```
-打开 `http://localhost:5173/` 即可看到炫酷的 SaaS 管理页面。
 
 ## 🎬 终极场景演示：金融风控 Agent
 
@@ -64,4 +71,4 @@ npx tsx examples/financial-agent.ts
 你将看到极具科幻感的终端日志流打印：AI 如何发掘了“借贷记录API”和“最高法老赖黑名单API”，并分别支付 0.5CNY 和 1CNY 买到了核心档案，最终生成拒绝贷款报告卡的全过程。
 
 ---
-*Created as part of the POC phase to revolutionize AI-to-AI / Agent-to-Agent Micro-transactions.*
+*Created as part of the POC phase to revolutionize AI-to-AI / Agent-to-Agent Micro-transactions. Phase 9: Infrastructure Hardening & Commercialization Ready.*

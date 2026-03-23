@@ -1,6 +1,6 @@
 {
   "projectName": "DataPay-Demo",
-  "port": 4020,
+  "port": 4021,
   "walletAddress": "demo-wallet-001",
   "currency": "CNY",
   "assets": [

@@ -13,6 +13,7 @@ import { nanoid } from 'nanoid';
 import { sendWebhook, WebhookPayload } from './webhooks.js';
 import { accountManager, JWT_SECRET } from './accounts.js';
 import jwt from 'jsonwebtoken';
+import { db } from './lib/db.js';
 
 const startTime = Date.now();
 
@@ -29,7 +30,7 @@ const triggerWebhook = async (address: string, payload: WebhookPayload) => {
 /**
  * Create and configure the Express server
  */
-export function createServer(configDir?: string) {
+export async function createServer(configDir?: string) {
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -37,9 +38,26 @@ export function createServer(configDir?: string) {
   const config = loadConfig(configDir);
   const runtimes = new Map<string, AssetRuntime>();
 
-  // Load all assets into memory
-  for (const assetConfig of config.assets) {
+  // Use Prisma to load assets instead of config.assets
+  const dbAssets = await db.asset.findMany();
+  console.log(`📡 [Server] 从数据库加载了 ${dbAssets.length} 个资产`);
+
+  for (const dbAsset of dbAssets) {
     try {
+      const assetConfig: AssetConfig = {
+        id: dbAsset.id,
+        name: dbAsset.name,
+        description: dbAsset.description || '',
+        source: dbAsset.source,
+        sourceType: dbAsset.sourceType as any,
+        price: dbAsset.price,
+        currency: dbAsset.currency,
+        tags: JSON.parse(dbAsset.tags || '[]'),
+        totalQueries: dbAsset.totalQueries,
+        totalRevenue: dbAsset.totalRevenue,
+        publishedAt: dbAsset.publishedAt.toISOString()
+      };
+
       if (assetConfig.sourceType === 'api' || assetConfig.sourceType === 'scraper') {
         runtimes.set(assetConfig.id, { config: assetConfig, data: [], schema: {} });
       } else {
@@ -48,7 +66,7 @@ export function createServer(configDir?: string) {
         runtimes.set(assetConfig.id, { config: assetConfig, data, schema });
       }
     } catch (err: any) {
-      console.error(`⚠️  加载资产失败 [${assetConfig.name}]: ${err.message}`);
+      console.error(`⚠️  加载资产失败 [${dbAsset.name}]: ${err.message}`);
     }
   }
 
@@ -57,21 +75,22 @@ export function createServer(configDir?: string) {
   // ──────────────────────────────────────────────
 
   /** Well-known asset discovery endpoint */
-  app.get('/.well-known/x402-assets.json', (_req, res) => {
-    const assets = config.assets.map(a => ({
+  app.get('/.well-known/x402-assets.json', async (_req, res) => {
+    const assets = await db.asset.findMany();
+    const result = assets.map((a: any) => ({
       id: a.id,
       name: a.name,
       description: a.description,
       price: a.price,
       currency: a.currency,
-      tags: a.tags,
+      tags: JSON.parse(a.tags || '[]'),
       endpoint: `/api/v1/data/${a.id}`,
       qualityScore: 'unverified',
     }));
     res.json({
       x402Version: '1.0',
       provider: config.projectName,
-      assets,
+      assets: result,
       totalAssets: assets.length,
     });
   });
@@ -120,11 +139,12 @@ export function createServer(configDir?: string) {
   });
 
   /** Server status */
-  app.get('/status', (_req, res) => {
+  app.get('/status', async (_req, res) => {
+    const assets = await db.asset.findMany();
     const status: ServerStatus = {
       running: true,
       port: config.port,
-      assets: config.assets.map(a => ({
+      assets: assets.map((a: any) => ({
         id: a.id,
         name: a.name,
         price: a.price,
@@ -132,8 +152,8 @@ export function createServer(configDir?: string) {
         totalQueries: a.totalQueries,
         totalRevenue: a.totalRevenue,
       })),
-      totalQueries: config.assets.reduce((sum, a) => sum + a.totalQueries, 0),
-      totalRevenue: config.assets.reduce((sum, a) => sum + a.totalRevenue, 0),
+      totalQueries: assets.reduce((sum: number, a: any) => sum + a.totalQueries, 0),
+      totalRevenue: assets.reduce((sum: number, a: any) => sum + a.totalRevenue, 0),
       uptime: Math.floor((Date.now() - startTime) / 1000),
     };
     res.json(status);
@@ -141,33 +161,34 @@ export function createServer(configDir?: string) {
 
   /**
    * GET /api/v1/search
-   * Search assets using weighted keyword matching
+   * Search assets using database query
    */
-  app.get('/api/v1/search', (req, res) => {
+  app.get('/api/v1/search', async (req, res) => {
     const q = (req.query.q as string || '').toLowerCase();
-    if (!q) return res.json(config.assets);
-
-    const keywords = q.split(/\s+/).filter(Boolean);
     
-    const results = config.assets.map(asset => {
-      let score = 0;
-      const name = asset.name.toLowerCase();
-      const desc = asset.description.toLowerCase();
-      const tags = (asset.tags || []).map(t => t.toLowerCase());
+    // 多租户隔离：如果提供了 token 且带了 context=mine，只搜自己的
+    const isMine = req.query.context === 'mine';
+    const providerId = (req as any).account?.id;
 
-      keywords.forEach(kw => {
-        if (name.includes(kw)) score += 5;
-        if (tags.some(t => t.includes(kw))) score += 3;
-        if (desc.includes(kw)) score += 1;
-      });
+    const assets = await db.asset.findMany({
+      where: {
+        AND: [
+          isMine && providerId ? { providerId } : {},
+          q ? {
+            OR: [
+              { name: { contains: q } },
+              { description: { contains: q } },
+              { tags: { contains: q } }
+            ]
+          } : {}
+        ]
+      }
+    });
 
-      return { ...asset, searchScore: score };
-    })
-    .filter(a => a.searchScore > 0)
-    .sort((a, b: any) => b.searchScore - a.searchScore)
-    .map(({ searchScore, ...rest }) => rest);
-
-    res.json(results);
+    res.json(assets.map((a: any) => ({
+      ...a,
+      tags: JSON.parse(a.tags || '[]')
+    })));
   });
 
   // --- Middleware ---
@@ -229,9 +250,10 @@ export function createServer(configDir?: string) {
     res.json(await accountManager.getAccount(address));
   });
 
-  app.post('/api/v1/account/topup', async (req, res) => {
-    const { address, amount } = req.body;
-    const newBalance = await accountManager.topup(address || 'default-user', parseFloat(amount) || 10);
+  app.post('/api/v1/account/topup', authenticate, async (req: any, res) => {
+    const address = req.account?.address || req.body.address || 'demo-user';
+    const { amount } = req.body;
+    const newBalance = await accountManager.topup(address, parseFloat(amount) || 10);
     res.json({ success: true, balance: newBalance });
   });
 
@@ -304,7 +326,6 @@ export function createServer(configDir?: string) {
 
   app.post('/api/v1/account/keys/rotate', authenticate, async (req: any, res) => {
     const address = req.account?.address || req.body.address;
-    if (!address) return res.status(400).json({ error: 'Missing address' });
     const newKey = await accountManager.generateApiKey(address);
     res.json({ success: true, apiKey: newKey });
   });
@@ -318,57 +339,63 @@ export function createServer(configDir?: string) {
     res.json({ success: true, webhookUrl: url });
   });
 
-  /** Publish a new asset dynamically from the dashboard */
-  app.post('/api/v1/assets', (req, res) => {
-    const { name, description, source, price, currency, tags } = req.body;
-    
-    if (!name || !source || price === undefined) {
-      res.status(400).json({ error: '缺少必填字段 (name, source, price)' });
+  /** POST /api/v1/assets - Publish new asset (DB integrated) */
+  app.post('/api/v1/assets', authenticate, async (req, res) => {
+    const { name, description, source, sourceType, price, currency, tags } = req.body;
+    const providerId = (req as any).account.id;
+
+    if (!name || !source || !sourceType || price === undefined) {
+      res.status(400).json({ error: '缺少必要字段: name, source, sourceType, price' });
       return;
     }
 
-    const isApi = source.startsWith('http://') || source.startsWith('https://');
-    let dataLength = '未知 (API代理)';
-    let schema: Record<string, string> = {};
-    let data: any[] = [];
-    let _sourceType: 'api' | 'json' | 'csv' = 'api';
-
     try {
-      if (!isApi) {
+      const assetId = nanoid(10);
+      const _sourceType = sourceType as 'json' | 'csv' | 'api' | 'scraper';
+
+      let data: any[] = [];
+      let schema: Record<string, string> = {};
+
+      if (_sourceType === 'json' || _sourceType === 'csv') {
         const sourcePath = resolve(configDir || process.cwd(), source);
-        const parsed = loadAssetData(sourcePath);
-        dataLength = `${parsed.data.length} 条记录`;
-        schema = parsed.schema;
-        data = parsed.data;
-        // Use provided sourceType or infer from extension
-        _sourceType = (req.body.sourceType as 'json' | 'csv') || (source.endsWith('.csv') ? 'csv' : 'json');
-      } else {
-        _sourceType = 'api';
+        const loaded = loadAssetData(sourcePath);
+        data = loaded.data;
+        schema = loaded.schema;
       }
 
-      const assetId = nanoid(10);
-      const asset: AssetConfig = {
-        id: assetId,
-        name: name,
-        description: description || (isApi ? `${name} - 动态 API 接口` : `${name} - 包含 ${dataLength}`),
-        source: source,
+      // Save to database
+      const dbAsset = await db.asset.create({
+        data: {
+          id: assetId,
+          name,
+          description,
+          source,
+          sourceType: _sourceType,
+          price: parseFloat(price),
+          currency: currency || config.currency,
+          tags: JSON.stringify(Array.isArray(tags) ? tags : []),
+          providerId
+        }
+      });
+
+      const assetConfig: AssetConfig = {
+        id: dbAsset.id,
+        name: dbAsset.name,
+        description: dbAsset.description || '',
+        source: dbAsset.source,
         sourceType: _sourceType,
-        price: parseFloat(price),
-        currency: currency || config.currency,
-        tags: Array.isArray(tags) ? tags : (tags ? String(tags).split(',').map(t => t.trim()) : []),
-        publishedAt: new Date().toISOString(),
+        price: dbAsset.price,
+        currency: dbAsset.currency,
+        tags: Array.isArray(tags) ? tags : [],
         totalQueries: 0,
         totalRevenue: 0,
+        publishedAt: dbAsset.publishedAt.toISOString()
       };
 
-      // Ensure no duplicate name issues or handle gracefully
-      config.assets.push(asset);
-      saveConfig(config, configDir);
-
       // Hot reload to memory
-      runtimes.set(assetId, { config: asset, data, schema });
+      runtimes.set(assetId, { config: assetConfig, data, schema });
 
-      res.status(201).json({ success: true, asset });
+      res.status(201).json({ success: true, asset: assetConfig });
     } catch (err: any) {
       res.status(500).json({ error: '配置或加载资产失败', details: err.message });
     }
@@ -587,10 +614,11 @@ export function createServer(configDir?: string) {
 /**
  * Start the server
  */
-export function startServer(configDir?: string): Promise<void> {
-  return new Promise((resolve) => {
-    const { app, config, runtimes } = createServer(configDir);
+export async function startServer(configDir?: string): Promise<void> {
+  const result = await createServer(configDir);
+  const { app, config, runtimes } = result;
 
+  return new Promise((resolve) => {
     app.listen(config.port, () => {
       console.log('');
       console.log('  🚀 DataPay 服务已启动');

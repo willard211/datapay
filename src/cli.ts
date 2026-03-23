@@ -12,6 +12,7 @@ import { createConfig, configExists, loadConfig, saveConfig } from './config.js'
 import { loadAssetData } from './asset-loader.js';
 import { startServer } from './server.js';
 import { getQueryLogs } from './payment.js';
+import { db } from './lib/db.js';
 import type { AssetConfig } from './types.js';
 
 const program = new Command();
@@ -115,19 +116,38 @@ program
         totalRevenue: 0,
       };
 
-      // Check for duplicate names
-      const existing = config.assets.find(a => a.name === asset.name);
-      if (existing) {
-        console.log(chalk.yellow(`⚠️  已存在同名资产 "${asset.name}"，将覆盖更新`));
-        Object.assign(existing, asset);
-      } else {
-        config.assets.push(asset);
+      // Create DB record
+      let defaultUser = await db.user.findFirst();
+      if (!defaultUser) {
+        throw new Error('未找到可用用户，请先启动服务并进行注册');
       }
 
+      await db.asset.upsert({
+        where: { id: assetId },
+        update: {
+          name: asset.name,
+          description: asset.description,
+          price: asset.price,
+          tags: JSON.stringify(asset.tags)
+        },
+        create: {
+          id: assetId,
+          name: asset.name,
+          description: asset.description,
+          source: asset.source,
+          sourceType: asset.sourceType,
+          price: asset.price,
+          currency: asset.currency,
+          tags: JSON.stringify(asset.tags),
+          providerId: defaultUser.id
+        }
+      });
+
+      // Legacy support: also save to config (optional, keeping for CLI simplicity)
       saveConfig(config);
 
       console.log('');
-      console.log(chalk.green(`✅ 资产已发布！`));
+      console.log(chalk.green(`✅ 资产已发布并同步至数据库！`));
       console.log('');
       console.log(`  ${chalk.bold('资产信息')}`);
       console.log(`  ├── ID:     ${chalk.cyan(asset.id)}`);
@@ -172,12 +192,6 @@ program
       saveConfig(config);
     }
 
-    if (config.assets.length === 0) {
-      console.log(chalk.yellow('⚠️  还没有发布任何资产。请先运行:'));
-      console.log(chalk.cyan('    wrap402 publish ./your-data.json --price 0.10'));
-      return;
-    }
-
     await startServer();
   });
 
@@ -194,6 +208,7 @@ program
     }
 
     const config = loadConfig();
+    const assets = await db.asset.findMany();
     const logs = await getQueryLogs();
 
     console.log('');
@@ -201,16 +216,16 @@ program
     console.log('  ─────────────────────────────────────');
     console.log('');
 
-    if (config.assets.length === 0) {
+    if (assets.length === 0) {
       console.log(chalk.dim('  暂无资产。运行 wrap402 publish <file> 发布资产'));
     } else {
       let totalQueries = 0;
       let totalRevenue = 0;
 
-      for (const asset of config.assets) {
+      for (const asset of assets) {
         const assetLogs = logs.filter(l => l.assetId === asset.id);
         const queries = assetLogs.length || asset.totalQueries;
-        const revenue = assetLogs.reduce((sum, l) => sum + l.amount, 0) || asset.totalRevenue;
+        const revenue = assetLogs.reduce((sum: number, l: any) => sum + l.amount, 0) || asset.totalRevenue;
         totalQueries += queries;
         totalRevenue += revenue;
 
@@ -233,20 +248,20 @@ program
 program
   .command('list')
   .description('列出所有已发布的资产')
-  .action(() => {
+  .action(async () => {
     if (!configExists()) {
       console.log(chalk.red('❌ 请先运行 wrap402 init 初始化项目'));
       return;
     }
 
-    const config = loadConfig();
+    const assets = await db.asset.findMany();
     console.log('');
-    console.log(chalk.bold(`  📦 已发布资产 (${config.assets.length} 个)`));
+    console.log(chalk.bold(`  📦 已发布资产 (${assets.length} 个)`));
     console.log('');
 
-    for (const asset of config.assets) {
+    for (const asset of assets) {
       console.log(`  • ${chalk.bold(asset.name)}`);
-      console.log(`    ${chalk.dim(asset.description)}`);
+      console.log(`    ${chalk.dim(asset.description || '')}`);
       console.log(`    价格: ${chalk.yellow(`${asset.price} ${asset.currency}/次`)}  |  ID: ${chalk.dim(asset.id)}`);
       console.log('');
     }
