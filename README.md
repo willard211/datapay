@@ -10,10 +10,12 @@ DataPay (底层 CLI 引擎名 `wrap402`) 是一个基于 HTTP `402 Payment Requi
 
 ## ✨ 核心特性
 
-- **🤖 AI 原生发现 (Auto-Discovery)**：内置 `/.well-known/x402-assets.json` 和 `openapi.json` 挂载点，任意支持联网规范的 AI Agent 都会自动解析你的资产货架并知道如何买单。
-- **🔌 动态 API 逆向代理 (Reverse Proxy)**：不仅支持静态文件，还能填入真实的第三方 URL（例如汇率 API、失信黑名单库），引擎会在前端执行计费拦截，收到钱后再隐式调用上游真正 API 返回数据。
-- **🎨 极客风 Web 控制台 (Dashboard)**：自带 Vite + React + TailwindCSS 开发的顶级赛博朋克深色仪表盘。可视化查看 AI 调用流水账单，**支持在网页端一键上架新 API，内存无缝热重载**。
-- **🛡️ 密码学验证 (x402 Protocol)**：完整模拟 X-PAYMENT 签名交易体系。
+- **🤖 AI 原生发现 (Auto-Discovery)**：内置 `/.well-known/x402-assets.json` 和 `openapi.json` 挂载点，任意支持联网规范的 AI Agent 都会自动解析资产货架并知道如何买单。
+- **🔌 动态 API 逆向代理与计费拦截**：不仅支持静态文件（JSON/CSV）和网页抓取（Scraper），还能填入第三方 URL，引擎会在前端执行计费拦截，收到钱后再隐式调用上游真正 API 返回数据。
+- **🧠 智能代理网关 (Smart Agent Gateway)**：内置自然语言路由网关（`/api/v1/agent/ask`）。Agent 只需发送通用需求（如“帮我查一下这家公司的信用”），网关会自动匹配相关资产、扣费并返回最终结构化数据——无需代码硬编码资产 ID！
+- **💼 完整账户与回调系统**：内置开箱即用的开发者账户系统（API Key 管理、余额控制）和指数退避的 Webhook 异步回调机制。
+- **🛠️ TypeScript SDK (`DataPayClient`)**：提供极简的 SDK，几行代码就能完成 `discover()` 资产发现、带有自动 402 处理重试机制的 `request()` 以及余额查询。
+- **🎨 极客风 Web 控制台 (Dashboard)**：基于 React + Tailwind 开发的赛博朋克深色仪表盘。包括多端融合的控制中心、动态真实数据驱动的商业洞察分析页、API 资产市场（含一键测试文档）以及可视化的 Agent 实验室。
 
 ## 📦 架构说明
 
