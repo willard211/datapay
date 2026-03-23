@@ -79,31 +79,78 @@ export function parsePaymentHeader(header: string): X402Payment | null {
 }
 
 /**
+ * Interface for pluggable payment verifiers
+ */
+export interface PaymentVerifier {
+  scheme: string;
+  network: string;
+  verify(payment: X402Payment, asset: AssetConfig): { valid: boolean; reason?: string };
+}
+
+/**
+ * Default POC Verifier: accepts any signature with correct amount
+ */
+class MockVerifier implements PaymentVerifier {
+  scheme = 'x402';
+  network = 'internal';
+
+  verify(payment: X402Payment, asset: AssetConfig) {
+    if (!payment.signature || payment.signature.length < 8) {
+      return { valid: false, reason: '无效的内部支付签名' };
+    }
+    return { valid: true };
+  }
+}
+
+/**
+ * Solana Mock Verifier: simulates on-chain signature verification
+ */
+class SolanaMockVerifier implements PaymentVerifier {
+  scheme = 'x402';
+  network = 'solana';
+
+  verify(payment: X402Payment, asset: AssetConfig) {
+    // In a real implementation, we would use @solana/web3.js to verify the signature
+    // Here we simulate a check for a valid-looking base58 signature (approx 88 chars)
+    if (!payment.signature || payment.signature.length < 32) {
+      return { valid: false, reason: '无效的 Solana 交易签名格式' };
+    }
+    console.log(`[SolanaVerifier] 正在验证地址 ${payment.payer} 的签名...`);
+    return { valid: true };
+  }
+}
+
+const verifiers: PaymentVerifier[] = [
+  new MockVerifier(),
+  new SolanaMockVerifier()
+];
+
+/**
  * Verify payment for an asset
- * In POC mode: accept any well-formed payment with correct amount
- * In production: verify on-chain signature / check balance
  */
 export function verifyPayment(payment: X402Payment, asset: AssetConfig): { valid: boolean; reason?: string } {
-  // Check amount
+  // 1. Basic checks (Amount & Token)
   const paidAmount = parseFloat(payment.amount);
   if (isNaN(paidAmount) || paidAmount < asset.price) {
     return { valid: false, reason: `支付金额不足: 需要 ${asset.price} ${asset.currency}，收到 ${payment.amount}` };
   }
 
-  // Check timestamp (within 5 minutes)
+  // 2. Expiration check (5 mins)
   const now = Date.now();
   const fiveMinutes = 5 * 60 * 1000;
   if (Math.abs(now - payment.timestamp) > fiveMinutes) {
-    return { valid: false, reason: '支付时间戳已过期（超过5分钟）' };
+    return { valid: false, reason: '支付时间戳已过期' };
   }
 
-  // Check signature is present
-  if (!payment.signature || payment.signature.length < 8) {
-    return { valid: false, reason: '无效的支付签名' };
+  // 3. Find specific verifier
+  const verifier = verifiers.find(v => v.scheme === payment.scheme && v.network === payment.network);
+  if (!verifier) {
+    // Fallback to basic check if no specific verifier exists
+    if (!payment.signature) return { valid: false, reason: `不支持的支付方式: ${payment.scheme}/${payment.network}` };
+    return { valid: true };
   }
 
-  // POC: accept payment
-  return { valid: true };
+  return verifier.verify(payment, asset);
 }
 
 /**

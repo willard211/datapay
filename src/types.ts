@@ -27,7 +27,7 @@ export interface AssetConfig {
   /** Source file path or URL */
   source: string;
   /** Source type */
-  sourceType: 'json' | 'csv' | 'api';
+  sourceType: 'json' | 'csv' | 'api' | 'scraper';
   /** Price per query */
   price: number;
   /** Currency (e.g., "CNY", "USDC") */

@@ -28,8 +28,20 @@
 - **演示剧本**：我们扮演由第三方出资的“信贷审批 AI”；它需要从“借贷记录局”和“最高法失信黑名单库”获取资料。虽然这些属于外部收费机构，但由于它们部署了 DataPay 节点，我们的 AI 通过脚本自动完成了 402 协议感知、账单支付和核心绝密档案的下载，最终做出不予放贷的金融决策。
 - 这一步直接印证了产品的底层价值逻辑，至此，MVP 最小可行性产品已经完全闭环。
 
-### Phase 5: 云端化与文档整理（本阶段）
+### Phase 5: 云端化与文档整理
 - 项目推进到了代码进入 GitHub 版本控制的阶段。
 - 我们补充了完整的业务层说明：《Business Plan》(商业计划书) 和《Architecture》(产品架构设计)，彻底将我们的灵感不仅沉淀在代码层面，也定格在了宏伟的发展蓝图中。
 
+### Phase 6: 账户系统、Webhook 与智能网关
+- **账户管理 (`accounts.ts`)**：实现了完整的开发者账户系统，包含余额管理、充值 (`topup`)、消费 (`spend`)、API Key 生成与轮转等功能。账户数据持久化到本地 `.wrap402-accounts.json` 文件。
+- **Webhook 异步通知 (`webhooks.ts`)**：实现了带指数退避重试重试逻辑的 Webhook 服务，在支付成功、资产创建等事件时自动推送通知至开发者配置的回调地址。
+- **Smart Agent Gateway (`/api/v1/agent/ask`)**：构建了一个自然语言驱动的智能网关。AI Agent 只需用"人话"描述需求，Gateway 会自动搜索最匹配的资产、完成账户扣款、获取数据并返回结构化结果。这使得 Agent 无需了解具体的资产 ID 或 API 路径。
+- **Dashboard 扩展**：新增"账户余额"Tab（API Key 管理、Webhook 配置、余额充值）和"Agent 实验室"Tab（可视化测试智能网关）。
+
+### Phase 7: TypeScript SDK 与 Agent 演示矩阵
+- **TypeScript SDK (`sdk/typescript/`)**：将 x402 交互协议封装为开发者友好的 SDK 类 `DataPayClient`，提供 `discover()` 资产发现、`request()` 自动 402 处理/支付/重试、`ask()` 自然语言网关调用、`getBalance()` 余额查询等方法。
+- **Market Agent 演示 (`examples/market-agent.ts`)**：基于 SDK 构建的行业趋势分析 Agent，展示了完整的 Discover → Select → Pay → Access 四步闭环流程。
+- **Dashboard 扩展**：新增"数据分析"Tab，包含 7 天营收趋势图表（Recharts AreaChart）、调用频次可视化、头部资产营收贡献率看板。
+
 -- *由开发者与 Antigravity AI 在结对编程中共同整理*
+

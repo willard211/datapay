@@ -6,12 +6,24 @@ import express from 'express';
 import cors from 'cors';
 import { loadConfig, saveConfig } from './config.js';
 import { loadAssetData } from './asset-loader.js';
-import { createPaymentRequired, parsePaymentHeader, verifyPayment, recordQuery, updateAssetStats } from './payment.js';
+import { createPaymentRequired, parsePaymentHeader, verifyPayment, recordQuery, updateAssetStats, getQueryLogs } from './payment.js';
 import type { AssetConfig, AssetRuntime, ServerStatus } from './types.js';
 import { resolve } from 'path';
 import { nanoid } from 'nanoid';
+import { sendWebhook, WebhookPayload } from './webhooks.js';
+import { accountManager } from './accounts.js';
 
 const startTime = Date.now();
+
+/**
+ * Helper to trigger webhook for an account
+ */
+const triggerWebhook = (address: string, payload: WebhookPayload) => {
+  const account = accountManager.getAccount(address);
+  if (account.webhookUrl) {
+    sendWebhook(account.webhookUrl, payload).catch(err => console.error(`[Webhook Error] ${err.message}`));
+  }
+};
 
 /**
  * Create and configure the Express server
@@ -27,7 +39,7 @@ export function createServer(configDir?: string) {
   // Load all assets into memory
   for (const assetConfig of config.assets) {
     try {
-      if (assetConfig.sourceType === 'api') {
+      if (assetConfig.sourceType === 'api' || assetConfig.sourceType === 'scraper') {
         runtimes.set(assetConfig.id, { config: assetConfig, data: [], schema: {} });
       } else {
         const sourcePath = resolve(configDir || process.cwd(), assetConfig.source);
@@ -126,6 +138,146 @@ export function createServer(configDir?: string) {
     res.json(status);
   });
 
+  /**
+   * GET /api/v1/search
+   * Search assets using weighted keyword matching
+   */
+  app.get('/api/v1/search', (req, res) => {
+    const q = (req.query.q as string || '').toLowerCase();
+    if (!q) return res.json(config.assets);
+
+    const keywords = q.split(/\s+/).filter(Boolean);
+    
+    const results = config.assets.map(asset => {
+      let score = 0;
+      const name = asset.name.toLowerCase();
+      const desc = asset.description.toLowerCase();
+      const tags = (asset.tags || []).map(t => t.toLowerCase());
+
+      keywords.forEach(kw => {
+        if (name.includes(kw)) score += 5;
+        if (tags.some(t => t.includes(kw))) score += 3;
+        if (desc.includes(kw)) score += 1;
+      });
+
+      return { ...asset, searchScore: score };
+    })
+    .filter(a => a.searchScore > 0)
+    .sort((a, b: any) => b.searchScore - a.searchScore)
+    .map(({ searchScore, ...rest }) => rest);
+
+    res.json(results);
+  });
+
+  // --- Middleware ---
+  const authenticate = (req: any, res: any, next: any) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const account = accountManager.getAccountByApiKey(token);
+      if (account) {
+        req.account = account;
+        return next();
+      }
+    }
+    // Fallback for legacy requests or dashboard local testing
+    next();
+  };
+
+  // --- Account & Gateway APIs ---
+
+  app.get('/api/v1/account/balance', authenticate, (req: any, res) => {
+    const address = req.account?.address || req.query.address as string || 'demo-user';
+    res.json(accountManager.getAccount(address));
+  });
+
+  app.post('/api/v1/account/topup', (req, res) => {
+    const { address, amount } = req.body;
+    const newBalance = accountManager.topup(address || 'default-user', parseFloat(amount) || 10);
+    res.json({ success: true, balance: newBalance });
+  });
+
+  /**
+   * The Smart Gateway: Ask with Natural Language
+   */
+  app.get('/api/v1/agent/ask', authenticate, async (req: any, res) => {
+    const q = req.query.q as string;
+    const address = req.account?.address || req.query.address as string || 'demo-user';
+
+    if (!q) return res.status(400).json({ error: 'Missing query' });
+
+    // 1. Search for best asset
+    const searchRes = await fetch(`http://localhost:${config.port}/api/v1/search?q=${encodeURIComponent(q)}`);
+    const assets = await searchRes.json() as AssetConfig[];
+
+    if (assets.length === 0) {
+      return res.status(404).json({ error: '未找到相关数据资产。请尝试不同的关键字。' });
+    }
+
+    const bestAsset = assets[0];
+
+    // 2. Billing: Check balance and spend
+    const success = accountManager.spend(address, bestAsset.price);
+    if (!success) {
+      return res.status(402).json({ 
+        error: '余额不足', 
+        required: bestAsset.price, 
+        current: accountManager.getAccount(address).balance 
+      });
+    }
+
+    // 3. Fetch Data (Internal Call)
+    console.log(`🤖 [Gateway] 为 ${address} 自动购买资产: ${bestAsset.name} (${bestAsset.price} ${bestAsset.currency})`);
+    try {
+      // Simulate the x402 payment flow internally
+      const dataRes = await fetch(`http://localhost:${config.port}/api/v1/data/${bestAsset.id}`, {
+        headers: {
+          'X-PAYMENT': `x402;internal;${bestAsset.currency};${bestAsset.price};${address};auto-gateway-sig-${Date.now()};${Date.now()}`
+        }
+      });
+      
+      const payload = await dataRes.json();
+      res.json({
+        gateway_version: '1.0',
+        matched_asset: bestAsset.name,
+        cost: bestAsset.price,
+        remaining_balance: accountManager.getAccount(address).balance,
+        data: payload
+      });
+
+      // Async Webhook trigger
+      triggerWebhook(address, {
+        event: 'payment.success',
+        timestamp: new Date().toISOString(),
+        data: {
+          assetId: bestAsset.id,
+          assetName: bestAsset.name,
+          amount: bestAsset.price,
+          payer: address,
+          source: 'gateway'
+        }
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: 'Gateway Fetch Error', details: e.message });
+    }
+  });
+
+  app.post('/api/v1/account/keys/rotate', authenticate, (req: any, res) => {
+    const address = req.account?.address || req.body.address;
+    if (!address) return res.status(400).json({ error: 'Missing address' });
+    const newKey = accountManager.generateApiKey(address);
+    res.json({ success: true, apiKey: newKey });
+  });
+
+  app.post('/api/v1/account/webhook', authenticate, (req: any, res) => {
+    const address = req.account?.address || req.body.address;
+    const { url } = req.body;
+    if (!address || !url) return res.status(400).json({ error: 'Missing address or url' });
+    
+    accountManager.updateWebhook(address, url);
+    res.json({ success: true, webhookUrl: url });
+  });
+
   /** Publish a new asset dynamically from the dashboard */
   app.post('/api/v1/assets', (req, res) => {
     const { name, description, source, price, currency, tags } = req.body;
@@ -148,7 +300,10 @@ export function createServer(configDir?: string) {
         dataLength = `${parsed.data.length} 条记录`;
         schema = parsed.schema;
         data = parsed.data;
-        _sourceType = source.endsWith('.csv') ? 'csv' : 'json';
+        // Use provided sourceType or infer from extension
+        _sourceType = (req.body.sourceType as 'json' | 'csv') || (source.endsWith('.csv') ? 'csv' : 'json');
+      } else {
+        _sourceType = 'api';
       }
 
       const assetId = nanoid(10);
@@ -160,7 +315,7 @@ export function createServer(configDir?: string) {
         sourceType: _sourceType,
         price: parseFloat(price),
         currency: currency || config.currency,
-        tags: tags ? tags.map((t: string) => t.trim()) : [],
+        tags: Array.isArray(tags) ? tags : (tags ? String(tags).split(',').map(t => t.trim()) : []),
         publishedAt: new Date().toISOString(),
         totalQueries: 0,
         totalRevenue: 0,
@@ -176,6 +331,41 @@ export function createServer(configDir?: string) {
       res.status(201).json({ success: true, asset });
     } catch (err: any) {
       res.status(500).json({ error: '配置或加载资产失败', details: err.message });
+    }
+  });
+
+  /** 
+   * GET /api/v1/analytics/stats
+   * Get query and revenue stats for the last 7 days
+   */
+  app.get('/api/v1/analytics/stats', (_req, res) => {
+    try {
+      const logs = getQueryLogs();
+      const statsMap = new Map<string, { date: string, queries: number, revenue: number }>();
+      
+      // Initialize last 7 days with zeros
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        statsMap.set(dateStr, { date: dateStr, queries: 0, revenue: 0 });
+      }
+
+      // Aggregate logs from the .jsonl file
+      logs.forEach(log => {
+        const dateStr = log.timestamp.split('T')[0];
+        if (statsMap.has(dateStr)) {
+          const s = statsMap.get(dateStr)!;
+          s.queries += 1;
+          s.revenue += log.amount;
+        }
+      });
+
+      // Sort by date ascending for charts
+      const result = Array.from(statsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: '获取分析数据失败', details: err.message });
     }
   });
 
@@ -221,6 +411,51 @@ export function createServer(configDir?: string) {
     }
 
     // Payment verified → Return data
+    if (runtime.config.sourceType === 'scraper') {
+      try {
+        console.log(`🕷️ [Scraper] 正在抓取: ${runtime.config.source}`);
+        const response = await fetch(runtime.config.source);
+        const html = await response.text();
+        
+        // Simple POC: Extract body text and title
+        const titleMatch = html.match(/<title>(.*?)<\/title>/i);
+        const title = titleMatch ? titleMatch[1] : 'Unknown Title';
+        const bodyText = html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim().substring(0, 2000);
+
+        // NOTE: 与 api/json 分支保持一致，记录查询日志和资产统计
+        recordQuery(assetId, payment.payer, parseFloat(payment.amount), req.query as Record<string, string>);
+        updateAssetStats(assetId, parseFloat(payment.amount));
+
+        triggerWebhook(payment.payer, {
+          event: 'payment.success',
+          timestamp: new Date().toISOString(),
+          data: {
+            assetId: runtime.config.id,
+            assetName: runtime.config.name,
+            amount: parseFloat(payment.amount),
+            payer: payment.payer,
+            source: 'scraper'
+          }
+        });
+
+        res.setHeader('X-402-Payment-Status', 'verified');
+        res.json({
+          success: true,
+          asset: { id: runtime.config.id, name: runtime.config.name },
+          data: {
+            title,
+            url: runtime.config.source,
+            content: bodyText,
+            timestamp: new Date().toISOString()
+          }
+        });
+        return;
+      } catch (err: any) {
+        res.status(500).json({ error: '抓取失败', details: err.message });
+        return;
+      }
+    }
+
     if (runtime.config.sourceType === 'api') {
       try {
         const queryParams = new URLSearchParams(req.query as Record<string, string>).toString();
@@ -234,6 +469,18 @@ export function createServer(configDir?: string) {
         
         recordQuery(assetId, payment.payer, parseFloat(payment.amount), req.query as Record<string, string>);
         updateAssetStats(assetId, parseFloat(payment.amount));
+
+        triggerWebhook(payment.payer, {
+          event: 'payment.success',
+          timestamp: new Date().toISOString(),
+          data: {
+            assetId: runtime.config.id,
+            assetName: runtime.config.name,
+            amount: parseFloat(payment.amount),
+            payer: payment.payer,
+            source: 'api'
+          }
+        });
 
         res.setHeader('X-402-Payment-Status', 'verified');
         res.setHeader('X-402-Asset-Id', assetId);
