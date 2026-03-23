@@ -12,7 +12,10 @@ import {
   Globe,
   Key,
   Copy,
-  TrendingUp
+  TrendingUp,
+  User,
+  Lock,
+  LogOut
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -49,7 +52,20 @@ interface ServerStatus {
 // === API Fetcher ===
 const API_BASE = 'http://localhost:4020';
 
+const fetchAuth = async (url: string, options: any = {}) => {
+  const token = localStorage.getItem('datapay_token');
+  const headers = { ...options.headers };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return fetch(url, { ...options, headers });
+};
+
 export default function App() {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('datapay_token'));
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authForm, setAuthForm] = useState({ username: '', password: '' });
+  const [authError, setAuthError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -91,9 +107,37 @@ export default function App() {
     return ((avgSecond - avgFirst) / avgFirst) * 100;
   })();
 
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsAuthenticating(true);
+    setAuthError('');
+    try {
+      const endpoint = authMode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(authForm)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || '认证失败');
+      
+      localStorage.setItem('datapay_token', data.token);
+      setToken(data.token);
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('datapay_token');
+    setToken(null);
+  };
+
   const fetchStatus = async () => {
     try {
-      const res = await fetch(`${API_BASE}/status`);
+      const res = await fetchAuth(`${API_BASE}/status`);
       if (!res.ok) throw new Error('API server not running');
       const data = await res.json();
       setStatus(data);
@@ -108,7 +152,7 @@ export default function App() {
 
   const searchAssets = async (query: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/search?q=${encodeURIComponent(query)}`);
+      const res = await fetchAuth(`${API_BASE}/api/v1/search?q=${encodeURIComponent(query)}`);
       if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
       setMarketAssets(data);
@@ -119,7 +163,8 @@ export default function App() {
 
   const fetchAccount = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/account/balance?address=demo-user`);
+      // 鉴权改用 token 对应的自身的地址了，不需要 hardcode address
+      const res = await fetchAuth(`${API_BASE}/api/v1/account/balance`);
       const data = await res.json();
       setAccount(data);
       if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
@@ -130,7 +175,7 @@ export default function App() {
 
   const fetchAnalytics = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/analytics/stats`);
+      const res = await fetchAuth(`${API_BASE}/api/v1/analytics/stats`);
       const data = await res.json();
       setAnalyticsData(data);
     } catch (err) {
@@ -140,7 +185,7 @@ export default function App() {
 
   const handleTopup = async () => {
     try {
-      await fetch(`${API_BASE}/api/v1/account/topup`, {
+      await fetchAuth(`${API_BASE}/api/v1/account/topup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address: 'demo-user', amount: 50 })
@@ -154,10 +199,10 @@ export default function App() {
   const handleRotateKey = async () => {
     if (!window.confirm('确定要轮转 API Key 吗？旧的 Key 将立即失效。')) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/account/keys/rotate`, {
+        const res = await fetchAuth(`${API_BASE}/api/v1/account/keys/rotate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: 'demo-user' })
+        body: JSON.stringify({})
       });
       const data = await res.json();
       if (data.success) {
@@ -171,13 +216,10 @@ export default function App() {
   const handleUpdateWebhook = async () => {
     if (!account) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/account/webhook`, {
+        const res = await fetchAuth(`${API_BASE}/api/v1/account/webhook`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${account.apiKey}`
-        },
-        body: JSON.stringify({ address: 'demo-user', url: webhookUrl })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: webhookUrl })
       });
       const data = await res.json();
       if (data.success) alert('Webhook 配置成功！');
@@ -192,7 +234,7 @@ export default function App() {
     setIsLabLoading(true);
     setLabResult(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/agent/ask?q=${encodeURIComponent(labQuery)}&address=demo-user`);
+      const res = await fetchAuth(`${API_BASE}/api/v1/agent/ask?q=${encodeURIComponent(labQuery)}`);
       const data = await res.json();
       setLabResult(data);
       await fetchAccount(); // Refresh balance
@@ -207,7 +249,7 @@ export default function App() {
     e.preventDefault();
     setIsPublishing(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/assets`, {
+      const res = await fetchAuth(`${API_BASE}/api/v1/assets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -239,6 +281,82 @@ export default function App() {
     }, 5000);
     return () => clearInterval(timer);
   }, []);
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4 font-sans selection:bg-indigo-500/30">
+        <div className="max-w-md w-full rounded-2xl bg-slate-900 border border-white/10 shadow-2xl overflow-hidden">
+          <div className="p-8 text-center space-y-6">
+            <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+              <Database className="w-8 h-8 text-white" />
+            </div>
+            
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-white tracking-tight">DataPay 控制台</h2>
+              <p className="text-slate-400 text-sm">登陆以管理您的所有商业 x402 资产</p>
+            </div>
+
+            <form onSubmit={handleAuth} className="space-y-4 pt-4 text-left">
+              {authError && (
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm text-center">
+                  {authError}
+                </div>
+              )}
+              
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">用户名 / 账号</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+                  <input
+                    type="text"
+                    required
+                    value={authForm.username}
+                    onChange={e => setAuthForm({ ...authForm, username: e.target.value })}
+                    className="w-full bg-slate-950/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    placeholder="例如：demo-user"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">密码</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+                  <input
+                    type="password"
+                    required
+                    value={authForm.password}
+                    onChange={e => setAuthForm({ ...authForm, password: e.target.value })}
+                    className="w-full bg-slate-950/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isAuthenticating}
+                className="w-full h-11 bg-gradient-to-r from-indigo-500 flex items-center justify-center gap-2 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-indigo-500/25 transition-all outline-none"
+              >
+                {isAuthenticating && <RefreshCw className="w-5 h-5 animate-spin"/>}
+                {authMode === 'login' ? '登录' : '创建新租户'}
+              </button>
+            </form>
+          </div>
+          
+          <div className="bg-slate-900/50 p-4 border-t border-white/5 text-center">
+            <button
+              type="button"
+              onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(''); }}
+              className="text-sm text-slate-400 hover:text-white transition-colors underline decoration-slate-600 underline-offset-4"
+            >
+              {authMode === 'login' ? '首次使用？点击注册新环境' : '已有账号？返回登录'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
@@ -303,6 +421,15 @@ export default function App() {
               <Plus className="w-4 h-4" />
               发布新资产
             </button>
+            <div className="h-6 w-px bg-white/10 mx-2"></div>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-indigo-500/20 border border-indigo-500/50 flex items-center justify-center text-indigo-400">
+                <User className="w-4 h-4" />
+              </div>
+              <button onClick={handleLogout} className="p-2 rounded-md hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 transition-colors" title="登出退出">
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </nav>

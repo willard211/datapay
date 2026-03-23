@@ -7,3 +7,8 @@ dist/
 coverage/
 dashboard/node_modules/
 dashboard/dist/
+
+/src/generated/prisma
+dev.db
+*.db
+tmp_stripe_test.cjs

@@ -1,97 +1,170 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { db } from './lib/db.js';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
-interface Account {
+export const JWT_SECRET = process.env.JWT_SECRET || 'datapay-dev-secret-super-safe';
+
+export interface Account {
   address: string;
   balance: number;
-  apiKey: string;
-  webhookUrl?: string;
+  apiKey: string | null;
+  webhookUrl: string | null;
   lastUpdated: string;
 }
 
-const ACCOUNTS_FILE = '.wrap402-accounts.json';
-
 export class AccountManager {
-  private accounts: Map<string, Account> = new Map();
-  private filePath: string;
+  async register(username: string, passwordRaw: string): Promise<{ token: string, account: Account }> {
+    const existing = await db.user.findUnique({ where: { username } });
+    if (existing) throw new Error('用户已存在');
 
-  constructor(cwd: string = process.cwd()) {
-    this.filePath = resolve(cwd, ACCOUNTS_FILE);
-    this.load();
-  }
-
-  private load() {
-    if (existsSync(this.filePath)) {
-      try {
-        const data = JSON.parse(readFileSync(this.filePath, 'utf-8'));
-        Object.keys(data).forEach(addr => {
-          this.accounts.set(addr, data[addr]);
-        });
-      } catch (e) {
-        console.error('Failed to load accounts:', e);
-      }
-    }
-  }
-
-  private save() {
-    const data: Record<string, Account> = {};
-    this.accounts.forEach((acc, addr) => {
-      data[addr] = acc;
-    });
-    writeFileSync(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
-  }
-
-  getAccount(address: string): Account {
-    if (!this.accounts.has(address)) {
-      const newAcc = {
-        address,
-        balance: 10.0, // Default welcome bonus for POC
-        apiKey: `dp-${Math.random().toString(36).substring(2, 15)}`,
-        lastUpdated: new Date().toISOString()
-      };
-      this.accounts.set(address, newAcc);
-      this.save();
-    }
-    return this.accounts.get(address)!;
-  }
-
-  getAccountByApiKey(apiKey: string): Account | undefined {
-    for (const acc of this.accounts.values()) {
-      if (acc.apiKey === apiKey) return acc;
-    }
-    return undefined;
-  }
-
-  generateApiKey(address: string): string {
-    const acc = this.getAccount(address);
-    acc.apiKey = `dp-${Math.random().toString(36).substring(2, 15)}`;
-    this.save();
-    return acc.apiKey;
-  }
-
-  topup(address: string, amount: number): number {
-    const acc = this.getAccount(address);
-    acc.balance += amount;
-    acc.lastUpdated = new Date().toISOString();
-    this.save();
-    return acc.balance;
-  }
-
-  spend(address: string, amount: number): boolean {
-    const acc = this.getAccount(address);
-    if (acc.balance < amount) return false;
+    const password = await bcrypt.hash(passwordRaw, 10);
+    const apiKey = `dp-${Math.random().toString(36).substring(2, 15)}`;
     
-    acc.balance -= amount;
-    acc.lastUpdated = new Date().toISOString();
-    this.save();
+    const newUser = await db.user.create({
+      data: {
+        username,
+        password,
+        balance: 10.0, // Initial bonus
+        apiKey
+      }
+    });
+
+    const token = jwt.sign({ username, sub: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
+    
+    return {
+      token,
+      account: {
+        address: newUser.username,
+        balance: newUser.balance,
+        apiKey: newUser.apiKey,
+        webhookUrl: newUser.webhookUrl,
+        lastUpdated: newUser.updatedAt.toISOString(),
+      }
+    };
+  }
+
+  async login(username: string, passwordRaw: string): Promise<{ token: string, account: Account }> {
+    const user = await db.user.findUnique({ where: { username } });
+    if (!user) throw new Error('用户不存在或密码错误');
+
+    const valid = await bcrypt.compare(passwordRaw, user.password);
+    if (!valid && user.password !== 'temp-password') {
+       throw new Error('用户不存在或密码错误');
+    }
+
+    const token = jwt.sign({ username, sub: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    
+    return {
+      token,
+      account: {
+        address: user.username,
+        balance: user.balance,
+        apiKey: user.apiKey,
+        webhookUrl: user.webhookUrl,
+        lastUpdated: user.updatedAt.toISOString(),
+      }
+    };
+  }
+
+  async getAccount(address: string): Promise<Account> {
+    const user = await db.user.findUnique({ where: { username: address } });
+    if (!user) {
+      // Auto-create with welcome bonus for POC backward compatibility
+      const apiKey = `dp-${Math.random().toString(36).substring(2, 15)}`;
+      const newUser = await db.user.create({
+        data: {
+          username: address,
+          password: 'temp-password', // Will be changed when user officially registers
+          balance: 10.0,
+          apiKey: apiKey
+        }
+      });
+      return {
+        address: newUser.username,
+        balance: newUser.balance,
+        apiKey: newUser.apiKey,
+        webhookUrl: newUser.webhookUrl,
+        lastUpdated: newUser.updatedAt.toISOString(),
+      };
+    }
+
+    return {
+      address: user.username,
+      balance: user.balance,
+      apiKey: user.apiKey,
+      webhookUrl: user.webhookUrl,
+      lastUpdated: user.updatedAt.toISOString(),
+    };
+  }
+
+  async getAccountByApiKey(apiKey: string): Promise<Account | undefined> {
+    const user = await db.user.findUnique({ where: { apiKey } });
+    if (!user) return undefined;
+    
+    return {
+      address: user.username,
+      balance: user.balance,
+      apiKey: user.apiKey,
+      webhookUrl: user.webhookUrl,
+      lastUpdated: user.updatedAt.toISOString(),
+    };
+  }
+
+  async generateApiKey(address: string): Promise<string> {
+    const apiKey = `dp-${Math.random().toString(36).substring(2, 15)}`;
+    await db.user.upsert({
+      where: { username: address },
+      create: {
+        username: address,
+        password: 'temp-password',
+        balance: 10.0,
+        apiKey
+      },
+      update: {
+        apiKey
+      }
+    });
+    return apiKey;
+  }
+
+  async topup(address: string, amount: number): Promise<number> {
+    const user = await db.user.upsert({
+      where: { username: address },
+      create: {
+        username: address,
+        password: 'temp-password',
+        balance: 10.0 + amount,
+      },
+      update: {
+        balance: { increment: amount }
+      }
+    });
+    return user.balance;
+  }
+
+  async spend(address: string, amount: number): Promise<boolean> {
+    const user = await db.user.findUnique({ where: { username: address } });
+    if (!user || user.balance < amount) return false;
+
+    await db.user.update({
+      where: { username: address },
+      data: { balance: { decrement: amount } }
+    });
     return true;
   }
 
-  updateWebhook(address: string, url: string): void {
-    const acc = this.getAccount(address);
-    acc.webhookUrl = url;
-    acc.lastUpdated = new Date().toISOString();
-    this.save();
+  async updateWebhook(address: string, url: string): Promise<void> {
+    await db.user.upsert({
+      where: { username: address },
+      create: {
+        username: address,
+        password: 'temp-password',
+        webhookUrl: url
+      },
+      update: {
+        webhookUrl: url
+      }
+    });
   }
 }
 

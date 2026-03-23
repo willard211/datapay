@@ -11,15 +11,16 @@ import type { AssetConfig, AssetRuntime, ServerStatus } from './types.js';
 import { resolve } from 'path';
 import { nanoid } from 'nanoid';
 import { sendWebhook, WebhookPayload } from './webhooks.js';
-import { accountManager } from './accounts.js';
+import { accountManager, JWT_SECRET } from './accounts.js';
+import jwt from 'jsonwebtoken';
 
 const startTime = Date.now();
 
 /**
  * Helper to trigger webhook for an account
  */
-const triggerWebhook = (address: string, payload: WebhookPayload) => {
-  const account = accountManager.getAccount(address);
+const triggerWebhook = async (address: string, payload: WebhookPayload) => {
+  const account = await accountManager.getAccount(address);
   if (account.webhookUrl) {
     sendWebhook(account.webhookUrl, payload).catch(err => console.error(`[Webhook Error] ${err.message}`));
   }
@@ -170,11 +171,23 @@ export function createServer(configDir?: string) {
   });
 
   // --- Middleware ---
-  const authenticate = (req: any, res: any, next: any) => {
+  const authenticate = async (req: any, res: any, next: any) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const account = accountManager.getAccountByApiKey(token);
+      
+      // 1. Try JWT
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        const account = await accountManager.getAccount(decoded.username);
+        req.account = account;
+        return next();
+      } catch (e) {
+        // Not a valid JWT, fallback to api key check
+      }
+
+      // 2. Try API Key
+      const account = await accountManager.getAccountByApiKey(token);
       if (account) {
         req.account = account;
         return next();
@@ -184,16 +197,41 @@ export function createServer(configDir?: string) {
     next();
   };
 
-  // --- Account & Gateway APIs ---
-
-  app.get('/api/v1/account/balance', authenticate, (req: any, res) => {
-    const address = req.account?.address || req.query.address as string || 'demo-user';
-    res.json(accountManager.getAccount(address));
+  // --- Auth APIs ---
+  app.post('/api/v1/auth/register', async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+      
+      const result = await accountManager.register(username, password);
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
   });
 
-  app.post('/api/v1/account/topup', (req, res) => {
+  app.post('/api/v1/auth/login', async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+
+      const result = await accountManager.login(username, password);
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      res.status(401).json({ error: err.message });
+    }
+  });
+
+  // --- Account & Gateway APIs ---
+
+  app.get('/api/v1/account/balance', authenticate, async (req: any, res) => {
+    const address = req.account?.address || req.query.address as string || 'demo-user';
+    res.json(await accountManager.getAccount(address));
+  });
+
+  app.post('/api/v1/account/topup', async (req, res) => {
     const { address, amount } = req.body;
-    const newBalance = accountManager.topup(address || 'default-user', parseFloat(amount) || 10);
+    const newBalance = await accountManager.topup(address || 'default-user', parseFloat(amount) || 10);
     res.json({ success: true, balance: newBalance });
   });
 
@@ -217,12 +255,13 @@ export function createServer(configDir?: string) {
     const bestAsset = assets[0];
 
     // 2. Billing: Check balance and spend
-    const success = accountManager.spend(address, bestAsset.price);
+    const success = await accountManager.spend(address, bestAsset.price);
     if (!success) {
+      const currentAccount = await accountManager.getAccount(address);
       return res.status(402).json({ 
         error: '余额不足', 
         required: bestAsset.price, 
-        current: accountManager.getAccount(address).balance 
+        current: currentAccount.balance 
       });
     }
 
@@ -237,11 +276,12 @@ export function createServer(configDir?: string) {
       });
       
       const payload = await dataRes.json();
+      const currentAccount = await accountManager.getAccount(address);
       res.json({
         gateway_version: '1.0',
         matched_asset: bestAsset.name,
         cost: bestAsset.price,
-        remaining_balance: accountManager.getAccount(address).balance,
+        remaining_balance: currentAccount.balance,
         data: payload
       });
 
@@ -262,19 +302,19 @@ export function createServer(configDir?: string) {
     }
   });
 
-  app.post('/api/v1/account/keys/rotate', authenticate, (req: any, res) => {
+  app.post('/api/v1/account/keys/rotate', authenticate, async (req: any, res) => {
     const address = req.account?.address || req.body.address;
     if (!address) return res.status(400).json({ error: 'Missing address' });
-    const newKey = accountManager.generateApiKey(address);
+    const newKey = await accountManager.generateApiKey(address);
     res.json({ success: true, apiKey: newKey });
   });
 
-  app.post('/api/v1/account/webhook', authenticate, (req: any, res) => {
+  app.post('/api/v1/account/webhook', authenticate, async (req: any, res) => {
     const address = req.account?.address || req.body.address;
     const { url } = req.body;
     if (!address || !url) return res.status(400).json({ error: 'Missing address or url' });
     
-    accountManager.updateWebhook(address, url);
+    await accountManager.updateWebhook(address, url);
     res.json({ success: true, webhookUrl: url });
   });
 
@@ -338,9 +378,9 @@ export function createServer(configDir?: string) {
    * GET /api/v1/analytics/stats
    * Get query and revenue stats for the last 7 days
    */
-  app.get('/api/v1/analytics/stats', (_req, res) => {
+  app.get('/api/v1/analytics/stats', async (_req, res) => {
     try {
-      const logs = getQueryLogs();
+      const logs = await getQueryLogs();
       const statsMap = new Map<string, { date: string, queries: number, revenue: number }>();
       
       // Initialize last 7 days with zeros
@@ -400,7 +440,7 @@ export function createServer(configDir?: string) {
       return;
     }
 
-    const verification = verifyPayment(payment, runtime.config);
+    const verification = await verifyPayment(payment, runtime.config);
     if (!verification.valid) {
       res.status(402).json({
         error: '支付验证失败',
@@ -423,8 +463,8 @@ export function createServer(configDir?: string) {
         const bodyText = html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim().substring(0, 2000);
 
         // NOTE: 与 api/json 分支保持一致，记录查询日志和资产统计
-        recordQuery(assetId, payment.payer, parseFloat(payment.amount), req.query as Record<string, string>);
-        updateAssetStats(assetId, parseFloat(payment.amount));
+        await recordQuery(assetId, payment.payer, parseFloat(payment.amount), req.query as Record<string, string>);
+        await updateAssetStats(assetId, parseFloat(payment.amount));
 
         triggerWebhook(payment.payer, {
           event: 'payment.success',
@@ -467,8 +507,8 @@ export function createServer(configDir?: string) {
         }
         const apiData = await response.json();
         
-        recordQuery(assetId, payment.payer, parseFloat(payment.amount), req.query as Record<string, string>);
-        updateAssetStats(assetId, parseFloat(payment.amount));
+        await recordQuery(assetId, payment.payer, parseFloat(payment.amount), req.query as Record<string, string>);
+        await updateAssetStats(assetId, parseFloat(payment.amount));
 
         triggerWebhook(payment.payer, {
           event: 'payment.success',

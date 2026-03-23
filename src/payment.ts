@@ -4,10 +4,7 @@
 // ============================================================
 import type { X402PaymentRequired, X402Payment, PaymentMethod, AssetConfig, QueryLog } from './types.js';
 import { loadConfig, saveConfig } from './config.js';
-import { appendFileSync, existsSync, readFileSync } from 'fs';
-import { resolve } from 'path';
-
-const QUERY_LOG_FILE = '.wrap402-queries.jsonl';
+import { db } from './lib/db.js';
 
 /**
  * Generate a 402 Payment Required response for an asset
@@ -84,7 +81,7 @@ export function parsePaymentHeader(header: string): X402Payment | null {
 export interface PaymentVerifier {
   scheme: string;
   network: string;
-  verify(payment: X402Payment, asset: AssetConfig): { valid: boolean; reason?: string };
+  verify(payment: X402Payment, asset: AssetConfig): Promise<{ valid: boolean; reason?: string }>;
 }
 
 /**
@@ -94,7 +91,7 @@ class MockVerifier implements PaymentVerifier {
   scheme = 'x402';
   network = 'internal';
 
-  verify(payment: X402Payment, asset: AssetConfig) {
+  async verify(payment: X402Payment, asset: AssetConfig) {
     if (!payment.signature || payment.signature.length < 8) {
       return { valid: false, reason: '无效的内部支付签名' };
     }
@@ -102,16 +99,11 @@ class MockVerifier implements PaymentVerifier {
   }
 }
 
-/**
- * Solana Mock Verifier: simulates on-chain signature verification
- */
 class SolanaMockVerifier implements PaymentVerifier {
   scheme = 'x402';
   network = 'solana';
 
-  verify(payment: X402Payment, asset: AssetConfig) {
-    // In a real implementation, we would use @solana/web3.js to verify the signature
-    // Here we simulate a check for a valid-looking base58 signature (approx 88 chars)
+  async verify(payment: X402Payment, asset: AssetConfig) {
     if (!payment.signature || payment.signature.length < 32) {
       return { valid: false, reason: '无效的 Solana 交易签名格式' };
     }
@@ -120,68 +112,97 @@ class SolanaMockVerifier implements PaymentVerifier {
   }
 }
 
+import Stripe from 'stripe';
+
+class StripeVerifier implements PaymentVerifier {
+  scheme = 'x402';
+  network = 'stripe';
+  private stripe: Stripe;
+
+  constructor() {
+    this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+  }
+
+  async verify(payment: X402Payment, asset: AssetConfig) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return { valid: false, reason: '服务器未配置 Stripe 支付通道' };
+    }
+    
+    try {
+      console.log(`[StripeVerifier] 正在通过真实的 Stripe 网关扣除金额: ${asset.price} ${asset.currency}...`);
+      const charge = await this.stripe.charges.create({
+        amount: Math.round(asset.price * 100), // Stripe 采用最小货币单位 (分)
+        currency: asset.currency.toLowerCase(),
+        source: payment.signature, // 用签名位当做 Stripe 的 Card Token 传递
+        description: `Payment for x402 asset: ${asset.name} (ID: ${asset.id})`,
+      });
+      
+      if (charge.status === 'succeeded') {
+        return { valid: true };
+      } else {
+        return { valid: false, reason: `Stripe 扣款拒绝: 状态 [${charge.status}]` };
+      }
+    } catch (err: any) {
+      return { valid: false, reason: `Stripe 扣款异常: ${err.message}` };
+    }
+  }
+}
+
 const verifiers: PaymentVerifier[] = [
   new MockVerifier(),
-  new SolanaMockVerifier()
+  new SolanaMockVerifier(),
+  new StripeVerifier()
 ];
 
-/**
- * Verify payment for an asset
- */
-export function verifyPayment(payment: X402Payment, asset: AssetConfig): { valid: boolean; reason?: string } {
-  // 1. Basic checks (Amount & Token)
+export async function verifyPayment(payment: X402Payment, asset: AssetConfig): Promise<{ valid: boolean; reason?: string }> {
   const paidAmount = parseFloat(payment.amount);
   if (isNaN(paidAmount) || paidAmount < asset.price) {
     return { valid: false, reason: `支付金额不足: 需要 ${asset.price} ${asset.currency}，收到 ${payment.amount}` };
   }
 
-  // 2. Expiration check (5 mins)
   const now = Date.now();
   const fiveMinutes = 5 * 60 * 1000;
   if (Math.abs(now - payment.timestamp) > fiveMinutes) {
     return { valid: false, reason: '支付时间戳已过期' };
   }
 
-  // 3. Find specific verifier
   const verifier = verifiers.find(v => v.scheme === payment.scheme && v.network === payment.network);
   if (!verifier) {
-    // Fallback to basic check if no specific verifier exists
     if (!payment.signature) return { valid: false, reason: `不支持的支付方式: ${payment.scheme}/${payment.network}` };
     return { valid: true };
   }
 
-  return verifier.verify(payment, asset);
+  return await verifier.verify(payment, asset);
 }
 
 /**
  * Record a successful query
  */
-export function recordQuery(assetId: string, payer: string, amount: number, query?: Record<string, string>): void {
-  const log: QueryLog = {
-    assetId,
-    timestamp: new Date().toISOString(),
-    payer,
-    amount,
-    query,
-    paymentVerified: true,
-  };
+export async function recordQuery(assetId: string, payer: string, amount: number, query?: Record<string, string>): Promise<void> {
+  const user = await db.user.findUnique({ where: { username: payer } });
+  if (!user) return; // 容错处理
 
-  const logPath = resolve(process.cwd(), QUERY_LOG_FILE);
-  appendFileSync(logPath, JSON.stringify(log) + '\n', 'utf-8');
+  await db.transaction.create({
+    data: {
+      assetId,
+      payerId: user.id,
+      amount,
+    }
+  });
 }
 
 /**
  * Update asset statistics after a successful query
  */
-export function updateAssetStats(assetId: string, amount: number): void {
+export async function updateAssetStats(assetId: string, amount: number): Promise<void> {
   try {
-    const config = loadConfig();
-    const asset = config.assets.find(a => a.id === assetId);
-    if (asset) {
-      asset.totalQueries += 1;
-      asset.totalRevenue += amount;
-      saveConfig(config);
-    }
+    await db.asset.update({
+      where: { id: assetId },
+      data: {
+        totalQueries: { increment: 1 },
+        totalRevenue: { increment: amount }
+      }
+    });
   } catch {
     // Non-critical, log and continue
   }
@@ -190,15 +211,18 @@ export function updateAssetStats(assetId: string, amount: number): void {
 /**
  * Get query logs for an asset
  */
-export function getQueryLogs(assetId?: string): QueryLog[] {
-  const logPath = resolve(process.cwd(), QUERY_LOG_FILE);
-  if (!existsSync(logPath)) return [];
+export async function getQueryLogs(assetId?: string): Promise<QueryLog[]> {
+  const transactions = await db.transaction.findMany({
+    where: assetId ? { assetId } : undefined,
+    include: { payer: true },
+    orderBy: { timestamp: 'asc' }
+  });
 
-  const lines = readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean);
-  const logs = lines.map(line => JSON.parse(line) as QueryLog);
-
-  if (assetId) {
-    return logs.filter(log => log.assetId === assetId);
-  }
-  return logs;
+  return transactions.map((tx: any) => ({
+    assetId: tx.assetId,
+    timestamp: tx.timestamp.toISOString(),
+    payer: tx.payer.username,
+    amount: tx.amount,
+    paymentVerified: true
+  }));
 }

@@ -187,14 +187,14 @@ program
 program
   .command('status')
   .description('查看资产状态和调用统计')
-  .action(() => {
+  .action(async () => {
     if (!configExists()) {
       console.log(chalk.red('❌ 请先运行 wrap402 init 初始化项目'));
       return;
     }
 
     const config = loadConfig();
-    const logs = getQueryLogs();
+    const logs = await getQueryLogs();
 
     console.log('');
     console.log(chalk.bold(`  📊 ${config.projectName} - 资产状态`));

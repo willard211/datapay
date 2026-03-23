@@ -14,20 +14,34 @@
     "demo:serve": "tsx src/cli.ts serve",
     "demo:client": "tsx examples/agent-client.ts"
   },
-  "keywords": ["x402", "micropayment", "ai-agent", "data-monetization"],
+  "keywords": [
+    "x402",
+    "micropayment",
+    "ai-agent",
+    "data-monetization"
+  ],
   "license": "MIT",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
     "express": "^4.21.0",
+    "express-jwt": "^8.5.1",
+    "jsonwebtoken": "^9.0.3",
     "nanoid": "^5.0.7",
     "ora": "^8.1.0"
   },
   "devDependencies": {
+    "@prisma/client": "^5.21.1",
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.0.0",
+    "@types/stripe": "^8.0.416",
+    "prisma": "^5.21.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }

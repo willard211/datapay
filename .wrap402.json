@@ -18,8 +18,8 @@
         "企业信用"
       ],
       "publishedAt": "2026-03-21T01:15:57.069Z",
-      "totalQueries": 4,
-      "totalRevenue": 0.4
+      "totalQueries": 5,
+      "totalRevenue": 0.5
     },
     {
       "id": "289xVBuxSd",
@@ -44,8 +44,8 @@
       "currency": "CNY",
       "tags": [],
       "publishedAt": "2026-03-21T01:38:22.577Z",
-      "totalQueries": 2,
-      "totalRevenue": 2
+      "totalQueries": 3,
+      "totalRevenue": 3
     }
   ]
 }
