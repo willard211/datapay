@@ -19,7 +19,8 @@ import AssetDetailModal from './components/modals/AssetDetailModal';
 import type { Asset, ServerStatus } from './types';
 
 // === API Fetcher ===
-const API_BASE = 'http://localhost:4021';
+// 这里的 URL 已经硬编码为你部署成功的 Cloudflare Worker 地址
+const API_BASE = 'https://datapay-api.willard-zou211.workers.dev';
 
 const fetchAuth = async (url: string, options: any = {}) => {
   const token = localStorage.getItem('datapay_token');
