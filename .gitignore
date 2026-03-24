@@ -12,3 +12,9 @@ dashboard/dist/
 dev.db
 *.db
 tmp_stripe_test.cjs
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
