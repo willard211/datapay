@@ -1,6 +1,6 @@
 import { Context, Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { sign, verify } from 'hono/jwt';
+import { jwt, sign, verify } from 'hono/jwt';
 import { PrismaClient } from '@prisma/client';
 import { PrismaD1 } from '@prisma/adapter-d1';
 import bcrypt from 'bcryptjs';
@@ -26,23 +26,13 @@ const getPrisma = (env: Bindings) => {
   return new PrismaClient({ adapter });
 };
 
-// --- 认证中间件 ---
-const authMiddleware = async (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: () => Promise<void>) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-  const token = authHeader.split(' ')[1];
-  try {
-    const payload = await verify(token, c.env.JWT_SECRET);
-    c.set('jwtPayload', payload);
-    await next();
-  } catch (e) {
-    return c.json({ error: 'Invalid token' }, 401);
-  }
+// --- JWT 认证中间件 (使用 Hono 官方方式包装) ---
+const jwtAuth = (c: Context<{ Bindings: Bindings, Variables: Variables }>, next: () => Promise<void>) => {
+  const secret = c.env.JWT_SECRET || 'datapay-cloud-secret';
+  return jwt({ secret })(c, next);
 };
 
-// --- 1. 状态查询 (补全结构以配合 Dashboard) ---
+// --- 1. 状态查询 ---
 app.get('/status', async (c) => {
   const prisma = getPrisma(c.env);
   try {
@@ -59,7 +49,7 @@ app.get('/status', async (c) => {
       })),
       totalQueries,
       totalRevenue,
-      uptime: Math.floor(Date.now() / 1000) // 示意
+      uptime: Math.floor(Date.now() / 1000)
     });
   } catch (e: any) {
     return c.json({ running: true, error: e.message, assets: [], totalQueries: 0, totalRevenue: 0 }, 500);
@@ -89,11 +79,12 @@ app.post('/api/v1/auth/register', async (c) => {
       }
     });
 
+    const secret = c.env.JWT_SECRET || 'datapay-cloud-secret';
     const token = await sign({ 
       username: newUser.username, 
       sub: newUser.id, 
       exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 
-    }, c.env.JWT_SECRET);
+    }, secret);
 
     return c.json({
       success: true,
@@ -121,11 +112,12 @@ app.post('/api/v1/auth/login', async (c) => {
       return c.json({ error: '用户不存在或密码错误' }, 401);
     }
 
+    const secret = c.env.JWT_SECRET || 'datapay-cloud-secret';
     const token = await sign({ 
       username: user.username, 
       sub: user.id, 
       exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 
-    }, c.env.JWT_SECRET);
+    }, secret);
 
     return c.json({
       success: true,
@@ -141,9 +133,9 @@ app.post('/api/v1/auth/login', async (c) => {
   }
 });
 
-// --- 3. 账户与分析接口 ---
+// --- 3. 账户与分析接口 (受 JWT 保护) ---
 
-app.get('/api/v1/account/balance', authMiddleware, async (c) => {
+app.get('/api/v1/account/balance', jwtAuth, async (c) => {
   const payload = c.get('jwtPayload');
   const prisma = getPrisma(c.env);
   const user = await prisma.user.findUnique({ where: { username: payload.username } });
@@ -157,8 +149,7 @@ app.get('/api/v1/account/balance', authMiddleware, async (c) => {
   });
 });
 
-app.get('/api/v1/analytics/stats', async (c) => {
-  // 简化的分析数据：返回最近 7 天的空统计或模拟数据
+app.get('/api/v1/analytics/stats', jwtAuth, async (c) => {
   const result = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date();
@@ -169,7 +160,7 @@ app.get('/api/v1/analytics/stats', async (c) => {
   return c.json(result.reverse());
 });
 
-app.post('/api/v1/account/topup', authMiddleware, async (c) => {
+app.post('/api/v1/account/topup', jwtAuth, async (c) => {
   const payload = c.get('jwtPayload');
   const { amount } = await c.req.json();
   const prisma = getPrisma(c.env);
@@ -180,7 +171,7 @@ app.post('/api/v1/account/topup', authMiddleware, async (c) => {
   return c.json({ success: true, balance: user.balance });
 });
 
-app.post('/api/v1/account/keys/rotate', authMiddleware, async (c) => {
+app.post('/api/v1/account/keys/rotate', jwtAuth, async (c) => {
   const payload = c.get('jwtPayload');
   const newKey = `dp-${Math.random().toString(36).substring(2, 15)}`;
   const prisma = getPrisma(c.env);
@@ -191,7 +182,18 @@ app.post('/api/v1/account/keys/rotate', authMiddleware, async (c) => {
   return c.json({ success: true, apiKey: newKey });
 });
 
-// --- 4. 资产管理接口 ---
+app.post('/api/v1/account/webhook', jwtAuth, async (c) => {
+  const payload = c.get('jwtPayload');
+  const { webhookUrl } = await c.req.json();
+  const prisma = getPrisma(c.env);
+  await prisma.user.update({
+    where: { username: payload.username },
+    data: { webhookUrl }
+  });
+  return c.json({ success: true, webhookUrl });
+});
+
+// --- 4. 资产管理接口 (受 JWT 保护) ---
 
 app.get('/api/v1/search', async (c) => {
   const q = c.req.query('q') || '';
@@ -207,7 +209,7 @@ app.get('/api/v1/search', async (c) => {
   return c.json(assets.map(a => ({ ...a, tags: JSON.parse(a.tags || '[]') })));
 });
 
-app.post('/api/v1/assets', authMiddleware, async (c) => {
+app.post('/api/v1/assets', jwtAuth, async (c) => {
   const payload = c.get('jwtPayload');
   const { name, description, source, sourceType, price, currency, tags } = await c.req.json();
   const prisma = getPrisma(c.env);
@@ -230,7 +232,7 @@ app.post('/api/v1/assets', authMiddleware, async (c) => {
   }
 });
 
-// --- 5. 数据访问与网关 (核心 x402 逻辑) ---
+// --- 5. 数据访问与网关 ---
 
 app.get('/api/v1/data/:assetId', async (c) => {
   const assetId = c.req.param('assetId');
@@ -248,7 +250,6 @@ app.get('/api/v1/data/:assetId', async (c) => {
     }, 402);
   }
 
-  // 简化验证逻辑：更新资产统计
   await prisma.asset.update({
     where: { id: assetId },
     data: { 
@@ -263,7 +264,7 @@ app.get('/api/v1/data/:assetId', async (c) => {
   });
 });
 
-app.get('/api/v1/agent/ask', authMiddleware, async (c) => {
+app.get('/api/v1/agent/ask', jwtAuth, async (c) => {
   const q = c.req.query('q');
   if (!q) return c.json({ error: 'Missing query' }, 400);
 
@@ -274,7 +275,6 @@ app.get('/api/v1/agent/ask', authMiddleware, async (c) => {
 
   if (!asset) return c.json({ error: 'No matching asset found' }, 404);
 
-  // 检查余额并扣费
   const payload = c.get('jwtPayload');
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user || user.balance < asset.price) return c.json({ error: 'Insufficient balance' }, 402);
