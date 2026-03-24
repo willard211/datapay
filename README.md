@@ -1,5 +1,7 @@
 # 🚀 DataPay (Cloud-Native Edition)
 
+> **[访问在线演示 (Demo) : https://aichemy.cn](https://aichemy.cn)**
+>
 > **将任何闲置数据和 API，瞬间转化为 AI Agent 能自动付费调用的全云端微服务。**
 
 DataPay 是一个基于 HTTP `402 Payment Required` 协议的轻量级开发框架。本项目已全面适配 **Cloudflare 云生态**，支持 Serverless 架构，在零服务器成本的情况下，实现全球低延迟的数据变现。
