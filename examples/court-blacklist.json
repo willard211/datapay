@@ -1,0 +1,18 @@
+[
+  {
+    "idNumber": "110105199001011234",
+    "name": "张三",
+    "isBlacklisted": true,
+    "courtCaseNumber": "(2025)京01执1234号",
+    "executionAmount": 50000.0,
+    "status": "UNEXECUTED"
+  },
+  {
+    "idNumber": "440304199208089999",
+    "name": "王五",
+    "isBlacklisted": true,
+    "courtCaseNumber": "(2024)粤03执456号",
+    "executionAmount": 1200000.0,
+    "status": "UNEXECUTED"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "trendId": "T-001",
+    "topic": "LLM 推理速度优化",
+    "growth": "150%",
+    "forecast": "2026年将成为行业标准",
+    "keyPlayers": ["DeepSeek", "OpenAI", "Groq"],
+    "source": "DataPay Market Intel"
+  },
+  {
+    "trendId": "T-002",
+    "topic": "边缘端 AI 硬件",
+    "growth": "85%",
+    "forecast": "手机端本地推理能力将提升4倍",
+    "keyPlayers": ["Apple", "Qualcomm", "NVIDIA"],
+    "source": "TechRadar Pro"
+  },
+  {
+    "trendId": "T-003",
+    "topic": "多模态 Agent 协作架构",
+    "growth": "210%",
+    "forecast": "Agent 经济体规模将突破 100 亿美元",
+    "keyPlayers": ["Microsoft", "Google", "Antigravity"],
+    "source": "Economist AI Lab"
+  }
+]

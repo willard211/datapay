@@ -1,0 +1,14 @@
+name = "datapay-api"
+main = "src/worker.ts"
+compatibility_date = "2024-03-24"
+
+# 数据库绑定 (D1)
+[[d1_databases]]
+binding = "DB"
+database_name = "datapay-db"
+database_id = "5ef132e0-e678-48a5-bb68-a794edcd7b87"
+
+[vars]
+# 后端地址，用于前端环境变量 VITE_API_BASE
+NODE_ENV = "production"
+JWT_SECRET = "datapay-cloud-secret"
