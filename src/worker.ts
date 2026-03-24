@@ -35,7 +35,8 @@ const authMiddleware = async (c: Context<{ Bindings: Bindings, Variables: Variab
   const token = authHeader.split(' ')[1];
   try {
     const secret = c.env.JWT_SECRET || 'datapay-cloud-secret';
-    const payload = await verify(token, secret);
+    // 显式指定算法 HS256
+    const payload = await verify(token, secret, 'HS256');
     c.set('jwtPayload', payload);
     await next();
   } catch (e: any) {
@@ -95,7 +96,7 @@ app.post('/api/v1/auth/register', async (c) => {
       username: newUser.username, 
       sub: newUser.id, 
       exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 
-    }, secret);
+    }, secret, 'HS256');
 
     return c.json({
       success: true,
@@ -128,7 +129,7 @@ app.post('/api/v1/auth/login', async (c) => {
       username: user.username, 
       sub: user.id, 
       exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 
-    }, secret);
+    }, secret, 'HS256');
 
     return c.json({
       success: true,
