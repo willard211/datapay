@@ -1,6 +1,6 @@
 node_modules/
 dist/
-.wrap402-queries.jsonl
+.nexus402-queries.jsonl
 *.log
 .env
 .DS_Store

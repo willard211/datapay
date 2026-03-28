@@ -1,10 +1,10 @@
 {
-  "name": "wrap402",
+  "name": "nexus402",
   "version": "0.1.0",
   "description": "Wrap any digital asset into an x402-payable API endpoint for AI Agents",
   "type": "module",
   "bin": {
-    "wrap402": "./dist/cli.js"
+    "nexus402": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
