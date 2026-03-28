@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { Activity } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-// === Components ===
+// === Pages ===
+import LandingPage from './pages/LandingPage';
 import Layout from './components/Layout';
-import Auth from './components/Auth';
+import AuthModal from './components/AuthModal';
 import Dashboard from './pages/Dashboard';
 import Market from './pages/Market';
 import Wallet from './pages/Wallet';
@@ -37,6 +38,8 @@ const createFetchAuth = (onUnauthorized: () => void) => async (url: string, opti
 export default function App() {
   // --- Auth State ---
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('datapay_token'));
+  // NOTE: showAuthModal 控制登录/注册弹窗，未登录时主页始终可见
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authForm, setAuthForm] = useState({ username: '', password: '' });
   const [authError, setAuthError] = useState('');
@@ -169,6 +172,7 @@ export default function App() {
       if (!res.ok || !data.success) throw new Error(data.error || '认证失败');
       localStorage.setItem('datapay_token', data.token);
       setToken(data.token);
+      setShowAuthModal(false); // 登录成功后关闭弹窗
       toast.success(authMode === 'login' ? '登录成功！欢迎回来 👋' : '注册成功！已自动登录');
     } catch (err: any) {
       setAuthError(err.message);
@@ -316,17 +320,29 @@ export default function App() {
     return ((avgSecond - avgFirst) / avgFirst) * 100;
   })();
 
+  // NOTE: 三层路由：主页（公开） → 登录弹窗（叠加在主页上） → Dashboard（需鉴权）
   if (!token) {
     return (
       <>
         <Toaster position="top-right" toastOptions={{ style: { background: '#0f172a', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)' } }} />
-        <Auth 
-          mode={authMode} setMode={setAuthMode} 
-          form={authForm} setForm={setAuthForm} 
-          onSubmit={handleAuth} 
-          error={authError} setError={setAuthError} 
-          isAuthenticating={isAuthenticating} 
+        <LandingPage
+          onOpenAuth={(mode) => {
+            setAuthMode(mode);
+            setAuthError('');
+            setAuthForm({ username: '', password: '' });
+            setShowAuthModal(true);
+          }}
         />
+        {showAuthModal && (
+          <AuthModal
+            mode={authMode} setMode={setAuthMode}
+            form={authForm} setForm={setAuthForm}
+            onSubmit={handleAuth}
+            onClose={() => { setShowAuthModal(false); setAuthError(''); }}
+            error={authError} setError={setAuthError}
+            isAuthenticating={isAuthenticating}
+          />
+        )}
       </>
     );
   }
