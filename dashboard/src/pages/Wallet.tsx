@@ -1,5 +1,14 @@
-import React from 'react';
-import { Plus, Key, RefreshCw, Activity, Copy } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Key, RefreshCw, Activity, Copy, ArrowDownLeft } from 'lucide-react';
+
+interface Transaction {
+  id: string;
+  assetId: string;
+  assetName: string;
+  amount: number;
+  type: 'spend';
+  timestamp: string;
+}
 
 interface WalletProps {
   account: {
@@ -13,6 +22,8 @@ interface WalletProps {
   onUpdateWebhook: () => void;
   onRotateKey: () => void;
   onOpenTopup: () => void;
+  apiBase: string;
+  fetchAuth: (url: string, options?: any) => Promise<Response>;
 }
 
 const Wallet: React.FC<WalletProps> = ({
@@ -21,8 +32,31 @@ const Wallet: React.FC<WalletProps> = ({
   setWebhookUrl,
   onUpdateWebhook,
   onRotateKey,
-  onOpenTopup
+  onOpenTopup,
+  apiBase,
+  fetchAuth,
 }) => {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [txLoading, setTxLoading] = useState(false);
+
+  useEffect(() => {
+    const loadTransactions = async () => {
+      setTxLoading(true);
+      try {
+        const res = await fetchAuth(`${apiBase}/api/v1/transactions`);
+        if (res.ok) {
+          const data = await res.json();
+          setTransactions(data);
+        }
+      } catch (e) {
+        console.error('交易历史加载失败', e);
+      } finally {
+        setTxLoading(false);
+      }
+    };
+    loadTransactions();
+  }, [apiBase, fetchAuth]);
+
   return (
     <div className="max-w-2xl mx-auto space-y-8 py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="text-center">
@@ -66,7 +100,6 @@ const Wallet: React.FC<WalletProps> = ({
                   onClick={() => {
                     if (account?.apiKey) {
                       navigator.clipboard.writeText(account.apiKey);
-                      alert('API Key 已复制');
                     }
                   }}
                   className="flex items-center gap-1 p-2 px-3 rounded-lg bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/20 transition-all border border-indigo-500/20"
@@ -114,6 +147,41 @@ const Wallet: React.FC<WalletProps> = ({
             <Plus className="w-7 h-7" /> 账户充值
           </button>
         </div>
+      </div>
+
+      {/* NOTE: 近期交易历史区块，调用 /api/v1/transactions 接口 */}
+      <div className="rounded-3xl border border-white/10 bg-slate-900/50 backdrop-blur-xl overflow-hidden">
+        <div className="p-6 border-b border-white/5 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">近期交易记录</h2>
+          <span className="text-xs text-slate-500 font-mono">最近 20 条</span>
+        </div>
+        {txLoading ? (
+          <div className="py-12 text-center text-slate-500 text-sm">加载中...</div>
+        ) : transactions.length === 0 ? (
+          <div className="py-12 text-center text-slate-500 italic text-sm">暂无交易记录</div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {transactions.map((tx) => (
+              <div key={tx.id} className="flex items-center justify-between px-6 py-4 hover:bg-white/[0.02] transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400">
+                    <ArrowDownLeft className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-200">{tx.assetName}</div>
+                    <div className="text-xs text-slate-500 font-mono mt-0.5">
+                      {new Date(tx.timestamp).toLocaleString('zh-CN', { hour12: false })}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-black text-rose-400 tabular-nums">- ¥{tx.amount.toFixed(4)}</div>
+                  <div className="text-[10px] text-slate-600 uppercase font-bold">消费</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

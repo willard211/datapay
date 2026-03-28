@@ -1,5 +1,7 @@
 import React from 'react';
 import { RefreshCw, Activity } from 'lucide-react';
+import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
+import 'react-json-view-lite/dist/index.css';
 
 interface LabProps {
   labQuery: string;
@@ -62,13 +64,16 @@ const Lab: React.FC<LabProps> = ({
               </div>
             )}
           </div>
-          <div className="relative">
-            <pre className="p-8 text-sm font-mono text-indigo-300 overflow-auto max-h-[500px] bg-slate-950/20 custom-scrollbar whitespace-pre-wrap">
-              {JSON.stringify(labResult, null, 2)}
-            </pre>
-            <div className="absolute bottom-4 right-4 text-[10px] font-mono text-slate-600">
-               JSON RESPONSE OBJECT
-            </div>
+          {/* NOTE: 使用 react-json-view-lite 替换纯文本 <pre>，支持折叠展开导航 */}
+          <div className="p-6 bg-slate-950/20 overflow-auto max-h-[600px] custom-scrollbar">
+            <JsonView
+              data={labResult}
+              shouldExpandNode={allExpanded}
+              style={{
+                ...darkStyles,
+                container: 'font-mono text-sm leading-relaxed',
+              }}
+            />
           </div>
         </div>
       )}

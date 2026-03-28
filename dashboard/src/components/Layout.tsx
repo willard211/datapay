@@ -10,6 +10,7 @@ interface LayoutProps {
   onRefreshStatus: () => void;
   onOpenPublish: () => void;
   onLogout: () => void;
+  username?: string;
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -20,7 +21,8 @@ const Layout: React.FC<LayoutProps> = ({
   loading,
   onRefreshStatus,
   onOpenPublish,
-  onLogout
+  onLogout,
+  username
 }) => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
@@ -81,9 +83,12 @@ const Layout: React.FC<LayoutProps> = ({
             <div className="h-8 w-px bg-white/10"></div>
             
             <div className="flex items-center gap-3 group">
-              <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/5 flex items-center justify-center text-indigo-400 group-hover:border-indigo-500 transition-colors cursor-pointer">
+              <div className="h-10 w-10 rounded-full bg-slate-800 border border-white/5 flex items-center justify-center text-indigo-400 group-hover:border-indigo-500 transition-colors">
                 <User className="w-5 h-5" />
               </div>
+              {username && (
+                <span className="text-xs font-bold text-slate-400 hidden lg:block">{username}</span>
+              )}
               <button 
                 onClick={onLogout} 
                 className="p-2.5 rounded-xl hover:bg-rose-500/10 text-slate-500 hover:text-rose-400 transition-all active:scale-90" 

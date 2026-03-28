@@ -401,6 +401,71 @@ export async function createServer(configDir?: string) {
     }
   });
 
+  /**
+   * GET /api/v1/my-assets
+   * 返回当前登录用户发布的所有资产（多租户隔离）
+   */
+  app.get('/api/v1/my-assets', authenticate, async (req: any, res) => {
+    const providerId = req.account?.id;
+    if (!providerId) {
+      return res.status(401).json({ error: '未登录，无法查询资产' });
+    }
+    const assets = await db.asset.findMany({ where: { providerId } });
+    res.json(assets.map((a: any) => ({
+      ...a,
+      tags: JSON.parse(a.tags || '[]')
+    })));
+  });
+
+  /**
+   * DELETE /api/v1/assets/:id
+   * 下架指定资产（需鉴权 + 归属校验，防止越权操作）
+   */
+  app.delete('/api/v1/assets/:id', authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    const providerId = req.account?.id;
+    if (!providerId) return res.status(401).json({ error: '未登录' });
+    
+    const asset = await db.asset.findUnique({ where: { id } });
+    if (!asset) return res.status(404).json({ error: '资产不存在' });
+
+    // NOTE: 归属校验——只有资产发布者才能下架自己的资产
+    if (asset.providerId !== providerId) {
+      return res.status(403).json({ error: '无权限操作此资产' });
+    }
+
+    await db.asset.delete({ where: { id } });
+    runtimes.delete(id); // 同步移出内存运行时缓存
+    res.json({ success: true, message: `资产 [${asset.name}] 已成功下架` });
+  });
+
+  /**
+   * GET /api/v1/transactions
+   * 查询当前登录用户的交易历史（最近 20 条，按时间倒序）
+   */
+  app.get('/api/v1/transactions', authenticate, async (req: any, res) => {
+    const userId = req.account?.id;
+    if (!userId) return res.status(401).json({ error: '未登录' });
+    
+    const transactions = await db.transaction.findMany({
+      where: { payerId: userId },
+      include: { asset: { select: { name: true } } },
+      orderBy: { timestamp: 'desc' },
+      take: 20,
+    });
+
+    res.json(transactions.map((tx: any) => ({
+      id: tx.id,
+      assetId: tx.assetId,
+      assetName: tx.asset?.name || '未知资产',
+      amount: tx.amount,
+      type: 'spend',
+      timestamp: tx.timestamp.toISOString(),
+    })));
+  });
+
+
+
   /** 
    * GET /api/v1/analytics/stats
    * Get query and revenue stats for the last 7 days

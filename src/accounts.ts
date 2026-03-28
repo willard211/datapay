@@ -47,8 +47,13 @@ export class AccountManager {
     const user = await db.user.findUnique({ where: { username } });
     if (!user) throw new Error('用户不存在或密码错误');
 
+    // NOTE: 拒绝临时账号（POC 自动创建的占位账户）直接登录，必须经过正式注册
+    if (user.password === 'temp-password') {
+      throw new Error('该账号为临时占位账号，请重新注册');
+    }
+
     const valid = await bcrypt.compare(passwordRaw, user.password);
-    if (!valid && user.password !== 'temp-password') {
+    if (!valid) {
        throw new Error('用户不存在或密码错误');
     }
 
