@@ -1,0 +1,49 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL 数据库 ──────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: datapay_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: datapay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datapay_dev_password}
+      POSTGRES_DB: datapay_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datapay -d datapay_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── DataPay 后端 API ───────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: datapay_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://datapay:${POSTGRES_PASSWORD:-datapay_dev_password}@postgres:5432/datapay_db
+      JWT_SECRET: ${JWT_SECRET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      PLATFORM_COMMISSION_RATE: ${PLATFORM_COMMISSION_RATE:-0.15}
+      PORT: 4021
+    ports:
+      - "4021:4021"
+    # 等待数据库就绪后执行 migration
+    command: >
+      sh -c "npx prisma migrate deploy && node dist/cli.js serve"
+
+volumes:
+  postgres_data:
+    driver: local

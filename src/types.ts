@@ -1,56 +1,37 @@
 // ============================================================
-// DataPay / wrap402 - Core Type Definitions
+// DataPay / Nexus402 — 核心类型定义
 // ============================================================
 
-/** Configuration for the wrap402 project */
+/** 项目配置 */
 export interface Wrap402Config {
-  /** Project name */
   projectName: string;
-  /** Server port */
   port: number;
-  /** Wallet address for receiving payments */
   walletAddress: string;
-  /** Default currency */
   currency: string;
-  /** Registered assets */
   assets: AssetConfig[];
 }
 
-/** Configuration for a single published asset */
+/** 单个数据资产的配置 */
 export interface AssetConfig {
-  /** Unique asset ID */
   id: string;
-  /** Human-readable name */
   name: string;
-  /** Description for AI Agent discovery */
   description: string;
-  /** Source file path or URL */
   source: string;
-  /** Source type */
   sourceType: 'json' | 'csv' | 'api' | 'scraper';
-  /** Price per query */
   price: number;
-  /** Currency (e.g., "CNY", "USDC") */
   currency: string;
-  /** Asset category tags */
   tags: string[];
-  /** Published timestamp */
   publishedAt: string;
-  /** Total queries served */
   totalQueries: number;
-  /** Total revenue earned */
   totalRevenue: number;
+  providerRevenue?: number;
 }
 
-/** x402 Payment Required response payload */
+/** x402 Payment Required 响应体 */
 export interface X402PaymentRequired {
-  /** x402 protocol version */
   x402Version: string;
-  /** Accepted payment methods */
   accepts: PaymentMethod[];
-  /** Human-readable description */
   description: string;
-  /** Asset metadata */
   asset: {
     id: string;
     name: string;
@@ -58,64 +39,46 @@ export interface X402PaymentRequired {
   };
 }
 
-/** Payment method specification */
+/** 支付方式 */
 export interface PaymentMethod {
-  /** Payment scheme identifier */
   scheme: string;
-  /** Network (e.g., "base", "ethereum", "internal") */
   network: string;
-  /** Token (e.g., "USDC", "CNY-credits") */
   token: string;
-  /** Price amount */
   amount: string;
-  /** Recipient address or account */
   payTo: string;
-  /** Additional metadata */
   extra?: Record<string, string>;
 }
 
-/** Payment header from client */
+/** 客户端提交的支付信息（来自 X-PAYMENT header）*/
 export interface X402Payment {
-  /** Payment scheme used */
   scheme: string;
-  /** Network */
   network: string;
-  /** Token */
   token: string;
-  /** Amount paid */
   amount: string;
-  /** Payer identifier */
-  payer: string;
-  /** Payment signature or transaction hash */
-  signature: string;
-  /** Timestamp */
+  payer: string;      // 用户 ID（已登录用户的数据库 ID）
+  signature: string;  // HMAC Token / Stripe PI ID / Solana tx hash
   timestamp: number;
+  assetId?: string;   // 可选：内部 HMAC 验证时需要
 }
 
-/** Query log entry */
+/** 查询日志条目 */
 export interface QueryLog {
-  /** Asset queried */
   assetId: string;
-  /** Timestamp */
   timestamp: string;
-  /** Payer ID */
   payer: string;
-  /** Amount paid */
   amount: number;
-  /** Query parameters */
   query?: Record<string, string>;
-  /** Whether payment was verified */
   paymentVerified: boolean;
 }
 
-/** Asset runtime state */
+/** 资产运行时状态（内存缓存） */
 export interface AssetRuntime {
   config: AssetConfig;
   data: any[];
   schema: Record<string, string>;
 }
 
-/** Server status info */
+/** 服务状态 */
 export interface ServerStatus {
   running: boolean;
   port: number;

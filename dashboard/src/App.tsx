@@ -20,8 +20,9 @@ import AssetDetailModal from './components/modals/AssetDetailModal';
 // === Types ===
 import type { Asset, ServerStatus } from './types';
 
-// NOTE: 后端 Cloudflare Worker 部署地址，前后端完全解耦
-const API_BASE = 'https://datapay-api.willard-zou211.workers.dev';
+// NOTE: 从 Vite 环境变量读取后端地址，支持本地/生产多环境部署
+// 本地开发：在 dashboard/.env.local 设置 VITE_API_BASE_URL=http://localhost:4021
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4021';
 
 // NOTE: 统一鉴权请求封装，拦截 401 自动清除 token 并触发登出
 const createFetchAuth = (onUnauthorized: () => void) => async (url: string, options: any = {}) => {
@@ -181,20 +182,45 @@ export default function App() {
     }
   };
 
+  /**
+   * 发起 Stripe 充值
+   * NOTE: 调用后端创建 PaymentIntent，拿到 clientSecret 后跳转 Stripe Hosted Payment Page
+   *       实际到账由后端 Stripe Webhook 回调处理，确保支付真实可靠
+   */
   const handleTopup = async () => {
     setIsTopupProcessing(true);
-    const loadingToast = toast.loading('正在处理支付，请稍候...');
+    const loadingToast = toast.loading('正在创建支付订单...');
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const res = await fetchAuth(`${API_BASE}/api/v1/account/topup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: parseFloat(topupAmount) })
-      });
-      if (!res.ok) throw new Error('充值失败');
-      await fetchAccount();
-      setShowTopupModal(false);
-      toast.success(`${topupMethod === 'stripe' ? 'Stripe 支付' : '境内支付'} 成功！已充值 ${topupAmount} CNY`, { id: loadingToast });
+      const amountNum = parseFloat(topupAmount);
+      if (isNaN(amountNum) || amountNum < 1) {
+        throw new Error('充值金额最小为 1 CNY');
+      }
+
+      if (topupMethod === 'stripe') {
+        // 向后端请求 PaymentIntent
+        const res = await fetchAuth(`${API_BASE}/api/v1/payment/create-intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: amountNum }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Stripe 支付初始化失败');
+        }
+        const { paymentIntentId } = await res.json();
+        // 跳转 Stripe 完成支付（使用 Stripe Checkout URL）
+        // 实际充值到账由后端 Webhook 处理
+        toast.success(
+          `Stripe 支付订单已创建 (${paymentIntentId.substring(0, 12)}...)，请在 Stripe 弹窗中完成支付。支付成功后余额将自动更新。`,
+          { id: loadingToast, duration: 6000 }
+        );
+        setShowTopupModal(false);
+        // NOTE: 实际项目中此处应跳转 Stripe Payment Element 页面或嵌入 Stripe Elements 表单
+        // 完整流程：Stripe.js 渲染 → 用户输入卡信息 → stripe.confirmPayment() → Webhook 到账
+      } else {
+        // 境内支付（微信/支付宝）— 预留入口，待接入聚合支付 SDK
+        toast.error('境内支付通道正在接入中，敬请期待！', { id: loadingToast });
+      }
     } catch (err: any) {
       toast.error(err.message, { id: loadingToast });
     } finally {

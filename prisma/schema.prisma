@@ -1,54 +1,78 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// DataPay / Nexus402 — Prisma Schema
+// 生产环境使用 PostgreSQL
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  // 切换为 PostgreSQL，SQLite 无法支撑生产级并发写入
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(uuid())
-  username  String   @unique
-  password  String
-  apiKey    String?  @unique
+  id         String   @id @default(uuid())
+  username   String   @unique
+  password   String
+  apiKey     String?  @unique
   webhookUrl String?
-  balance   Float    @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  balance    Float    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   assets       Asset[]
-  transactions Transaction[] // User's spending (as payer)
+  transactions Transaction[] // 作为消费方的交易记录
 }
 
 model Asset {
-  id           String   @id @default(cuid())
-  providerId   String   // user who owns this asset
-  provider     User     @relation(fields: [providerId], references: [id])
-  name         String
-  description  String?
-  source       String   // File path or URL
-  sourceType   String   // json, csv, api, scraper
-  price        Float
-  currency     String   @default("CNY")
-  tags         String   @default("[]") // JSON string of tags array
-  totalQueries Int      @default(0)
-  totalRevenue Float    @default(0)
-  publishedAt  DateTime @default(now())
+  id              String   @id @default(cuid())
+  providerId      String   // 资产所有者用户 ID
+  provider        User     @relation(fields: [providerId], references: [id])
+  name            String
+  description     String?
+  source          String   // 文件路径或 URL
+  sourceType      String   // json | csv | api | scraper
+  price           Float
+  currency        String   @default("CNY")
+  tags            String   @default("[]") // JSON 字符串数组
+  totalQueries    Int      @default(0)
+  totalRevenue    Float    @default(0)
+  // NOTE: 提供方应计收益（扣除平台抽佣后）
+  providerRevenue Float    @default(0)
+  publishedAt     DateTime @default(now())
 
-  queries      Transaction[]
+  queries Transaction[]
 }
 
 model Transaction {
-  id         String   @id @default(uuid())
-  assetId    String
-  asset      Asset    @relation(fields: [assetId], references: [id])
-  payerId    String
-  payer      User     @relation(fields: [payerId], references: [id])
-  amount     Float
-  currency   String   @default("CNY")
-  timestamp  DateTime @default(now())
+  id        String   @id @default(uuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  payerId   String
+  payer     User     @relation(fields: [payerId], references: [id])
+  amount    Float    // 用户实际支付金额
+  // NOTE: 平台抽佣金额（当前为 15%）
+  platformFee Float  @default(0)
+  currency  String   @default("CNY")
+  timestamp DateTime @default(now())
+  // 支付网络（internal / stripe / solana）
+  network   String   @default("internal")
+}
+
+// NOTE: Stripe 充值记录，用于幂等性校验（避免 Webhook 重复处理）
+model StripeTopup {
+  id                String   @id @default(uuid())
+  stripePaymentIntentId String @unique
+  userId            String
+  amount            Float
+  currency          String
+  status            String   // pending | succeeded | failed
+  createdAt         DateTime @default(now())
+}
+
+// NOTE: 平台配置（单行表，Key-Value 结构）
+model PlatformConfig {
+  key   String @id
+  value String
 }
