@@ -1,18 +1,18 @@
 import axios, { AxiosInstance } from 'axios';
 import { DiscoveryResponse, PaymentHeader, PaymentRequirement } from './types.js';
 
-export interface DataPayClientConfig {
+export interface Nexus402ClientConfig {
   baseUrl: string;
   payerId?: string;
   apiKey?: string;
   autoPay?: boolean;
 }
 
-export class DataPayClient {
+export class Nexus402Client {
   private client: AxiosInstance;
-  private config: DataPayClientConfig;
+  private config: Nexus402ClientConfig;
 
-  constructor(config: DataPayClientConfig) {
+  constructor(config: Nexus402ClientConfig) {
     this.config = config;
     this.client = axios.create({
       baseURL: config.baseUrl,

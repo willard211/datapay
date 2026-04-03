@@ -1,5 +1,5 @@
 // ============================================================
-// DataPay / Nexus402 — x402 支付引擎
+// Nexus402 / Nexus402 — x402 支付引擎
 // 负责 402 响应构造、支付验证、交易记录与资产统计更新
 // ============================================================
 import type { X402PaymentRequired, X402Payment, PaymentMethod, AssetConfig, QueryLog } from './types.js';

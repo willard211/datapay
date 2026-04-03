@@ -1,5 +1,5 @@
 // ============================================================
-// DataPay / Webhook Service
+// Nexus402 / Webhook Service
 // Handles asynchronous notifications to developer systems
 // ============================================================
 
@@ -23,7 +23,7 @@ export async function sendWebhook(url: string, payload: WebhookPayload, retries 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'DataPay-Webhook/1.0',
+          'User-Agent': 'Nexus402-Webhook/1.0',
         },
         body: JSON.stringify(payload),
       });

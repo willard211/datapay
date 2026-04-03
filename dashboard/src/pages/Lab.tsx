@@ -23,7 +23,7 @@ const Lab: React.FC<LabProps> = ({
       <div className="text-center max-w-2xl mx-auto">
         <h1 className="text-4xl font-black text-white mb-4 tracking-tight">Smart Agent 实验室</h1>
         <p className="text-slate-400 leading-relaxed text-lg">
-          输入人话，DataPay 自动搜寻最高匹配资产并代其付费取数。
+          输入人话，Nexus402 自动搜寻最高匹配资产并代其付费取数。
           <span className="block text-xs mt-2 text-indigo-400/60 font-mono">X402 PROTOCOL REAL-TIME EXECUTION</span>
         </p>
       </div>

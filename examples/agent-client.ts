@@ -1,5 +1,5 @@
 // ============================================================
-// DataPay / wrap402 - AI Agent Client Demo
+// Nexus402 / wrap402 - AI Agent Client Demo
 // Demonstrates the full x402 payment flow
 // ============================================================
 

@@ -26,7 +26,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4021';
 
 // NOTE: 统一鉴权请求封装，拦截 401 自动清除 token 并触发登出
 const createFetchAuth = (onUnauthorized: () => void) => async (url: string, options: any = {}) => {
-  const token = localStorage.getItem('datapay_token');
+  const token = localStorage.getItem('nexus402_token');
   const headers = { ...options.headers };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(url, { ...options, headers });
@@ -38,7 +38,7 @@ const createFetchAuth = (onUnauthorized: () => void) => async (url: string, opti
 
 export default function App() {
   // --- Auth State ---
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('datapay_token'));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('nexus402_token'));
   // NOTE: showAuthModal 控制登录/注册弹窗，未登录时主页始终可见
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -71,6 +71,7 @@ export default function App() {
   const [topupMethod, setTopupMethod] = useState<'stripe' | 'domestic'>('domestic');
   const [topupAmount, setTopupAmount] = useState('50');
   const [isTopupProcessing, setIsTopupProcessing] = useState(false);
+  const [topupClientSecret, setTopupClientSecret] = useState('');
 
   // --- Lab State ---
   const [labQuery, setLabQuery] = useState('');
@@ -80,7 +81,7 @@ export default function App() {
 
   // NOTE: 统一登出逻辑（401 自动触发 or 用户手动）
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('datapay_token');
+    localStorage.removeItem('nexus402_token');
     setToken(null);
     setStatus(null);
     setAccount(null);
@@ -102,7 +103,7 @@ export default function App() {
       setStatus(data);
       setError('');
     } catch (err: any) {
-      setError('无法连接到 DataPay 核心引擎。请确保已运行 wrap402 serve');
+      setError('无法连接到 Nexus402 核心引擎。请确保已运行 wrap402 serve');
       setStatus(null);
     } finally {
       setLoading(false);
@@ -171,7 +172,7 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || '认证失败');
-      localStorage.setItem('datapay_token', data.token);
+      localStorage.setItem('nexus402_token', data.token);
       setToken(data.token);
       setShowAuthModal(false); // 登录成功后关闭弹窗
       toast.success(authMode === 'login' ? '登录成功！欢迎回来 👋' : '注册成功！已自动登录');
@@ -207,16 +208,13 @@ export default function App() {
           const err = await res.json();
           throw new Error(err.error || 'Stripe 支付初始化失败');
         }
-        const { paymentIntentId } = await res.json();
-        // 跳转 Stripe 完成支付（使用 Stripe Checkout URL）
-        // 实际充值到账由后端 Webhook 处理
-        toast.success(
-          `Stripe 支付订单已创建 (${paymentIntentId.substring(0, 12)}...)，请在 Stripe 弹窗中完成支付。支付成功后余额将自动更新。`,
-          { id: loadingToast, duration: 6000 }
-        );
-        setShowTopupModal(false);
-        // NOTE: 实际项目中此处应跳转 Stripe Payment Element 页面或嵌入 Stripe Elements 表单
-        // 完整流程：Stripe.js 渲染 → 用户输入卡信息 → stripe.confirmPayment() → Webhook 到账
+        const { clientSecret, paymentIntentId } = await res.json();
+        
+        toast.dismiss(loadingToast);
+        
+        // 保存 clientSecret 用于渲染 Stripe Payment Element
+        setTopupClientSecret(clientSecret);
+        
       } else {
         // 境内支付（微信/支付宝）— 预留入口，待接入聚合支付 SDK
         toast.error('境内支付通道正在接入中，敬请期待！', { id: loadingToast });
@@ -433,11 +431,18 @@ export default function App() {
         />
         
         <TopupModal 
-          show={showTopupModal} onClose={() => setShowTopupModal(false)} 
+          show={showTopupModal} onClose={() => { setShowTopupModal(false); setTopupClientSecret(''); }} 
           onTopup={handleTopup} 
           amount={topupAmount} setAmount={setTopupAmount} 
           method={topupMethod} setMethod={setTopupMethod} 
           isProcessing={isTopupProcessing} 
+          clientSecret={topupClientSecret}
+          onPaymentSuccess={() => { 
+            setShowTopupModal(false); 
+            setTopupClientSecret(''); 
+            fetchAccount(); 
+          }}
+          clearClientSecret={() => setTopupClientSecret('')}
         />
         
         <AssetDetailModal 

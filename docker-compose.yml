@@ -4,35 +4,35 @@ services:
   # ── PostgreSQL 数据库 ──────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: datapay_postgres
+    container_name: nexus402_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: datapay
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datapay_dev_password}
-      POSTGRES_DB: datapay_db
+      POSTGRES_USER: nexus402
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus402_dev_password}
+      POSTGRES_DB: nexus402_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U datapay -d datapay_db"]
+      test: ["CMD-SHELL", "pg_isready -U nexus402 -d nexus402_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ── DataPay 后端 API ───────────────────────────────────────
+  # ── Nexus402 后端 API ───────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: datapay_api
+    container_name: nexus402_api
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://datapay:${POSTGRES_PASSWORD:-datapay_dev_password}@postgres:5432/datapay_db
+      DATABASE_URL: postgresql://nexus402:${POSTGRES_PASSWORD:-nexus402_dev_password}@postgres:5432/nexus402_db
       JWT_SECRET: ${JWT_SECRET}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}

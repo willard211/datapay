@@ -7,7 +7,7 @@ const AGENT_WALLET_PRIVATE_KEY = 'agent-wallet-1234';
 async function reviewLoanRequest(applicant: { name: string; idNumber: string; requestAmount: number }) {
   console.log(`\n🤖 [风控 Agent] 收到贷款申请审批任务...`);
   console.log(`👤 申请人: ${applicant.name} | 身份证号: ${applicant.idNumber} | 申请金额: ${applicant.requestAmount} CNY`);
-  console.log(`🔍 正在启动背景调查，通过 DataPay 市场寻找可用信贷风控数据源...`);
+  console.log(`🔍 正在启动背景调查，通过 Nexus402 市场寻找可用信贷风控数据源...`);
 
   // Step 1: Discover available API endpoints
   const discoveryRes = await fetch(`${ENGINE_URL}/.well-known/x402-assets.json`);
@@ -19,7 +19,7 @@ async function reviewLoanRequest(applicant: { name: string; idNumber: string; re
   const blacklistAsset = assets.find(a => a.name.includes('黑名单'));
 
   if (!loanRecordsAsset || !blacklistAsset) {
-    console.error('❌ 未能在 DataPay 市场上找到所需的风控数据，无法完成审批。');
+    console.error('❌ 未能在 Nexus402 市场上找到所需的风控数据，无法完成审批。');
     return;
   }
 

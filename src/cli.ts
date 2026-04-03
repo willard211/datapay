@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================
-// DataPay / wrap402 - CLI Entry Point
+// Nexus402 / wrap402 - CLI Entry Point
 // ============================================================
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -28,7 +28,7 @@ program
 program
   .command('init')
   .description('初始化 wrap402 项目')
-  .option('-n, --name <name>', '项目名称', 'my-datapay')
+  .option('-n, --name <name>', '项目名称', 'my-nexus402')
   .option('-p, --port <port>', '服务端口', '4020')
   .option('-w, --wallet <address>', '钱包地址', 'demo-wallet-001')
   .option('-c, --currency <currency>', '默认货币', 'CNY')

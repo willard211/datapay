@@ -58,7 +58,7 @@ const FEATURES = [
     color: 'from-violet-400 to-purple-600',
     glow: 'violet',
     title: 'TypeScript SDK',
-    desc: '极简 DataPayClient，三行代码完成资产发现→自动付款→数据获取的完整闭环。',
+    desc: '极简 Nexus402Client，三行代码完成资产发现→自动付款→数据获取的完整闭环。',
   },
 ];
 
@@ -83,7 +83,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth }) => {
               <Database className="w-4 h-4 text-white" />
             </div>
             <span className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 tracking-tight">
-              DataPay
+              Nexus402
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -128,7 +128,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth }) => {
           </h1>
 
           <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
-            DataPay 让任何开发者都能在 <strong className="text-white">30 秒</strong> 内，把本地 Excel、JSON 数据或第三方 API，
+            Nexus402 让任何开发者都能在 <strong className="text-white">30 秒</strong> 内，把本地 Excel、JSON 数据或第三方 API，
             包装成 AI Agent 能自动发现并按次计费调用的数据服务。
           </p>
 
@@ -175,9 +175,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth }) => {
               <span className="ml-3 text-xs text-slate-600 font-mono">agent-client.ts</span>
             </div>
             <pre className="font-mono text-sm leading-relaxed text-slate-300 whitespace-pre">
-{`import { DataPayClient } from 'datapay-sdk';
+{`import { Nexus402Client } from 'nexus402-sdk';
 
-const client = new DataPayClient({ apiKey: 'dp-your-key' });
+const client = new Nexus402Client({ apiKey: 'dp-your-key' });
 
 // 1. 自动发现所有可用资产
 const assets = await client.discover();
@@ -197,7 +197,7 @@ console.log(result.data); // 征信报告、风险评分、全都有 ✨`}
       <section className="py-24 px-6">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-black text-white tracking-tight mb-4">为什么选择 DataPay？</h2>
+            <h2 className="text-4xl font-black text-white tracking-tight mb-4">为什么选择 Nexus402？</h2>
             <p className="text-slate-400 text-lg max-w-xl mx-auto">
               专为 AI 时代设计的数据货币化基础设施，让数据产生持续的被动收入。
             </p>
@@ -286,7 +286,7 @@ console.log(result.data); // 征信报告、风险评分、全都有 ✨`}
       {/* ── 页脚 ── */}
       <footer className="border-t border-white/5 py-8 px-6">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-600 font-bold uppercase tracking-[0.15em]">
-          <div>© 2026 DATAPAY NETWORK · X402 PROTOCOL GATEWAY</div>
+          <div>© 2026 NEXUS402 NETWORK · X402 PROTOCOL GATEWAY</div>
           <div className="flex gap-6">
             <span className="hover:text-indigo-400 transition-colors cursor-pointer">Documentation</span>
             <span className="hover:text-indigo-400 transition-colors cursor-pointer">GitHub</span>

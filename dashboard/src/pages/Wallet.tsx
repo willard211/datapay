@@ -127,7 +127,7 @@ const Wallet: React.FC<WalletProps> = ({
                   type="text" 
                   value={webhookUrl}
                   onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://your-api.com/webhooks/datapay"
+                  placeholder="https://your-api.com/webhooks/nexus402"
                   className="flex-1 bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
                 />
                 <button 

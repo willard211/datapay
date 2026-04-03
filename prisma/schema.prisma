@@ -1,4 +1,4 @@
-// DataPay / Nexus402 — Prisma Schema
+// Nexus402 / Nexus402 — Prisma Schema
 // 生产环境使用 PostgreSQL
 
 generator client {

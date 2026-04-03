@@ -1,16 +1,16 @@
 /**
- * DataPay SDK Usage Example
- * Demonstrates how to use the DataPayClient to transparently handle 402 payments.
+ * Nexus402 SDK Usage Example
+ * Demonstrates how to use the Nexus402Client to transparently handle 402 payments.
  */
-import { DataPayClient } from '../sdk/typescript/src/index.js'; // Using src directly for tsx support
+import { Nexus402Client } from '../sdk/typescript/src/index.js'; // Using src directly for tsx support
 
 const BASE_URL = 'http://localhost:4020';
 
 async function main() {
-  console.log('🚀 [SDK Demo] Starting DataPay SDK demonstration...');
+  console.log('🚀 [SDK Demo] Starting Nexus402 SDK demonstration...');
 
   // 1. Initialize client with autoPay: true
-  const client = new DataPayClient({
+  const client = new Nexus402Client({
     baseUrl: BASE_URL,
     payerId: 'agent-sdk-007',
     autoPay: true

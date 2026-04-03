@@ -45,7 +45,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
           </div>
           
           <div className="space-y-2">
-            <h2 className="text-3xl font-black text-white tracking-tight">DataPay 控制台</h2>
+            <h2 className="text-3xl font-black text-white tracking-tight">Nexus402 控制台</h2>
             <p className="text-slate-400 text-sm font-medium">
               {mode === 'login' ? '管理您的所有商业 x402 资产' : '开启您的 AI 原生数据商业化之旅'}
             </p>

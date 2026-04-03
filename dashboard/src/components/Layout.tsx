@@ -33,7 +33,7 @@ const Layout: React.FC<LayoutProps> = ({
               <Database className="w-5 h-5 text-white" />
             </div>
             <span className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 tracking-tight">
-              DataPay
+              Nexus402
             </span>
             <div className="ml-12 flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-2xl border border-white/5 shadow-inner">
               {[
@@ -107,7 +107,7 @@ const Layout: React.FC<LayoutProps> = ({
       
       <footer className="w-full border-t border-white/5 py-8 mt-12 bg-slate-950/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 flex justify-between items-center text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em]">
-          <div>© 2026 DATAPAY NETWORK • X402 PROTOCOL GATEWAY</div>
+          <div>© 2026 NEXUS402 NETWORK • X402 PROTOCOL GATEWAY</div>
           <div className="flex gap-6">
             <span className="hover:text-indigo-400 transition-colors cursor-help">Documentation</span>
             <span className="hover:text-indigo-400 transition-colors cursor-help">Security Audit</span>

@@ -19,7 +19,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
       <div className="flex flex-col md:flex-row items-end justify-between gap-6 mb-10">
         <div>
           <h1 className="text-4xl font-black text-white mb-2 tracking-tight">商业洞察报告</h1>
-          <p className="text-slate-400 text-lg">实时追踪 DataPay 资产的全球营收与调用趋势</p>
+          <p className="text-slate-400 text-lg">实时追踪 Nexus402 资产的全球营收与调用趋势</p>
         </div>
         <div className="flex items-center gap-4 bg-indigo-500/10 border border-indigo-500/20 px-6 py-3 rounded-2xl shadow-lg shadow-indigo-500/5">
           <TrendingUp className="w-6 h-6 text-indigo-400" />

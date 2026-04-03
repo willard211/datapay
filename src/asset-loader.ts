@@ -1,5 +1,5 @@
 // ============================================================
-// DataPay / wrap402 - Asset Loader
+// Nexus402 / wrap402 - Asset Loader
 // Loads CSV/JSON data files and infers schema
 // ============================================================
 import { readFileSync } from 'fs';

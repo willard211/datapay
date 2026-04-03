@@ -1,5 +1,5 @@
 // ============================================================
-// DataPay / Nexus402 — Express Server
+// Nexus402 / Nexus402 — Express Server
 // 生产就绪版本：安全加固 + 真实支付 + SSRF 防护 + 租户隔离
 // ============================================================
 import express from 'express';
@@ -335,7 +335,7 @@ export async function createServer(configDir?: string) {
         metadata: {
           userId: req.account.id,
           username: req.account.address,
-          platform: 'datapay',
+          platform: 'nexus402',
         },
       });
 
@@ -856,7 +856,7 @@ export async function startServer(configDir?: string): Promise<void> {
   return new Promise((resolve) => {
     app.listen(config.port, () => {
       console.log('');
-      console.log('  🚀 DataPay / Nexus402 服务已启动（生产安全版）');
+      console.log('  🚀 Nexus402 / Nexus402 服务已启动（生产安全版）');
       console.log('  ─────────────────────────────────────────────');
       console.log(`  📡 端口:     http://localhost:${config.port}`);
       console.log(`  📦 资产数量: ${runtimes.size} 个`);

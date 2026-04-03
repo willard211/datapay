@@ -1,6 +1,7 @@
 import { db } from './lib/db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 
 // NOTE: 强制从环境变量读取 JWT_SECRET，不提供任何默认值
 // 服务启动时若未配置将抛出异常（见 validateEnv 函数）
@@ -207,7 +208,6 @@ export class AccountManager {
    * NOTE: 用 crypto 模块替换 Math.random()，后者不是密码学安全随机数
    */
   private generateSecureApiKey(): string {
-    const { randomBytes } = require('crypto');
     return `dp-${randomBytes(24).toString('hex')}`;
   }
 }

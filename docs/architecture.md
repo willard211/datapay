@@ -1,14 +1,14 @@
-# DataPay 产品架构设计 (Architecture)
+# Nexus402 产品架构设计 (Architecture)
 
 ## 系统全景图 (High-level Architecture)
 
-DataPay 系统的核心理念是**“非侵入式的代理计费”**。数据提供方不需要修改原有的业务逻辑，只需将 DataPay 引擎部署在真实服务的前端即可。
+Nexus402 系统的核心理念是**“非侵入式的代理计费”**。数据提供方不需要修改原有的业务逻辑，只需将 Nexus402 引擎部署在真实服务的前端即可。
 
 ```mermaid
 graph TD
-    A[AI Agent / LLM Client] -->|发起请求 HTTP GET /api/data| B(DataPay: wrap402 引擎)
+    A[AI Agent / LLM Client] -->|发起请求 HTTP GET /api/data| B(Nexus402: wrap402 引擎)
     
-    subgraph DataPay Node
+    subgraph Nexus402 Node
         B --> |拦截请求, 检查 Auth/Payment| C{需要支付?}
         C -->|是, 缺少支付凭证| D[返回 HTTP 402 Payment Required]
         C -->|否, 凭证有效| E[放行请求执行]

@@ -3,14 +3,14 @@
  * Full E2E Flow: Discover -> Select -> Pay -> Access
  * This Agent specifically searches for "Market Trends" to demonstrate discovery.
  */
-import { DataPayClient } from '../sdk/typescript/src/index.js';
+import { Nexus402Client } from '../sdk/typescript/src/index.js';
 
 const BASE_URL = 'http://localhost:4020';
 
 async function main() {
   console.log('🤖 [Market Agent] 启动中...');
   
-  const client = new DataPayClient({
+  const client = new Nexus402Client({
     baseUrl: BASE_URL,
     payerId: 'market-researcher-agent',
     autoPay: true

@@ -1,5 +1,5 @@
 // ============================================================
-// DataPay / wrap402 - Configuration Manager
+// Nexus402 / wrap402 - Configuration Manager
 // ============================================================
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
@@ -9,7 +9,7 @@ const CONFIG_FILE = '.wrap402.json';
 
 /** Default configuration */
 const DEFAULT_CONFIG: Wrap402Config = {
-  projectName: 'my-datapay',
+  projectName: 'my-nexus402',
   port: 4020,
   walletAddress: '',
   currency: 'CNY',

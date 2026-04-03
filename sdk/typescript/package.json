@@ -1,5 +1,5 @@
 {
-  "name": "@datapay/sdk",
+  "name": "@nexus402/sdk",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
