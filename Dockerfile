@@ -1,18 +1,27 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# 先复制 package.json 利用 Docker 缓存
 COPY package*.json ./
-RUN npm ci --only=production
-
-# 复制 Prisma schema 并生成 client
 COPY prisma ./prisma
-RUN npx prisma generate
+RUN npm ci
 
-# 复制源码并编译
 COPY . .
+RUN npx prisma generate
 RUN npm run build
+RUN npm prune --omit=dev
+
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/.wrap402.json ./.wrap402.json
+COPY --from=builder /app/.wrap402-accounts.json ./.wrap402-accounts.json
 
 EXPOSE 4021
 

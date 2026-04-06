@@ -30,11 +30,17 @@ export interface Account {
   lastUpdated: string;
 }
 
+function normalizeUsername(username: string): string {
+  return username.trim();
+}
+
 export class AccountManager {
   /**
    * 注册新用户
    */
   async register(username: string, passwordRaw: string): Promise<{ token: string; account: Account }> {
+    username = normalizeUsername(username);
+
     if (!username || username.length < 3 || username.length > 50) {
       throw new Error('用户名长度需在 3-50 个字符之间');
     }
@@ -69,6 +75,12 @@ export class AccountManager {
    * 用户登录
    */
   async login(username: string, passwordRaw: string): Promise<{ token: string; account: Account }> {
+    username = normalizeUsername(username);
+
+    if (!username) {
+      throw new Error('用户名和密码不能为空');
+    }
+
     const user = await db.user.findUnique({ where: { username } });
     // NOTE: 无论用户是否存在，都进行 bcrypt 比较，防止时序攻击
     if (!user) {
@@ -103,6 +115,7 @@ export class AccountManager {
    * 根据用户名获取账户（仅内部使用）
    */
   async getAccount(username: string): Promise<Account | null> {
+    username = normalizeUsername(username);
     const user = await db.user.findUnique({ where: { username } });
     if (!user) return null;
     return this.toAccount(user);

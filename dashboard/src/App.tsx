@@ -22,7 +22,30 @@ import type { Asset, ServerStatus } from './types';
 
 // NOTE: 从 Vite 环境变量读取后端地址，支持本地/生产多环境部署
 // 本地开发：在 dashboard/.env.local 设置 VITE_API_BASE_URL=http://localhost:4021
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4021';
+// 生产环境未显式配置时，默认回退到当前站点域名，避免把线上请求错误发到访问者本机 localhost。
+const resolveApiBase = () => {
+  const configuredBase = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (configuredBase) return configuredBase.replace(/\/$/, '');
+
+  if (typeof window === 'undefined') {
+    return 'http://localhost:4021';
+  }
+
+  const { protocol, hostname, origin } = window.location;
+  const isLocalhost =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '0.0.0.0' ||
+    hostname === '::1';
+
+  if (isLocalhost && (protocol === 'http:' || protocol === 'https:')) {
+    return 'http://localhost:4021';
+  }
+
+  return origin;
+};
+
+const API_BASE = resolveApiBase();
 
 // NOTE: 统一鉴权请求封装，拦截 401 自动清除 token 并触发登出
 const createFetchAuth = (onUnauthorized: () => void) => async (url: string, options: any = {}) => {
@@ -164,11 +187,19 @@ export default function App() {
     setIsAuthenticating(true);
     setAuthError('');
     try {
+      const username = authForm.username.trim();
+      if (!username) {
+        throw new Error('用户名不能为空');
+      }
+
       const endpoint = authMode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
       const res = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(authForm)
+        body: JSON.stringify({
+          ...authForm,
+          username,
+        })
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || '认证失败');

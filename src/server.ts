@@ -223,7 +223,8 @@ export async function createServer(configDir?: string) {
 
   app.post('/api/v1/auth/register', async (req, res) => {
     try {
-      const { username, password } = req.body;
+      const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
       if (!username || !password) {
         return res.status(400).json({ error: '用户名和密码不能为空' });
       }
@@ -236,7 +237,8 @@ export async function createServer(configDir?: string) {
 
   app.post('/api/v1/auth/login', async (req, res) => {
     try {
-      const { username, password } = req.body;
+      const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
       if (!username || !password) {
         return res.status(400).json({ error: '用户名和密码不能为空' });
       }
