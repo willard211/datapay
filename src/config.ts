@@ -28,7 +28,15 @@ export function loadConfig(dir?: string): Wrap402Config {
     throw new Error(`配置文件不存在: ${configPath}\n请先运行 wrap402 init 初始化项目`);
   }
   const raw = readFileSync(configPath, 'utf-8');
-  return JSON.parse(raw) as Wrap402Config;
+  const config = JSON.parse(raw) as Wrap402Config;
+  const envPort = Number.parseInt(process.env.PORT || '', 10);
+
+  // 托管平台通常会注入 PORT，优先使用运行时端口而不是仓库里的静态配置。
+  if (Number.isFinite(envPort) && envPort > 0) {
+    config.port = envPort;
+  }
+
+  return config;
 }
 
 /** Save configuration to disk */
