@@ -13,7 +13,9 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "demo:serve": "tsx src/cli.ts serve",
-    "demo:client": "tsx examples/agent-client.ts"
+    "demo:client": "tsx examples/agent-client.ts",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
   },
   "keywords": [
     "x402",
@@ -44,6 +46,7 @@
     "@types/node": "^22.0.0",
     "prisma": "^5.21.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "wrangler": "^4.76.0"
   }
 }
